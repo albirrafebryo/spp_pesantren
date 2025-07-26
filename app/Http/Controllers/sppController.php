@@ -18,8 +18,8 @@ class SppController extends Controller
                                 ->latest()
                                 ->paginate(20);
 
-        $tahunAjarans = tahunajaran::all();
-        $jenispembayarans = jenispembayaran::all();
+        $tahunAjarans = TahunAjaran::all();
+        $jenispembayarans = JenisPembayaran::all();
 
         return view('spp.index', compact('detailPembayarans', 'tahunAjarans', 'jenispembayarans'));
     }
