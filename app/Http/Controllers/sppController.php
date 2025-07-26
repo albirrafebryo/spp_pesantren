@@ -18,6 +18,7 @@ class SppController extends Controller
                                 ->latest()
                                 ->paginate(20);
 
+                                
         $tahunAjarans = TahunAjaran::all();
         $jenispembayarans = JenisPembayaran::all();
 
