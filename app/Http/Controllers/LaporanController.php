@@ -9,7 +9,7 @@ use App\Models\Pembayaran;
 use App\Models\DaftarUlang;
 use App\Models\TahunAjaran;
 use Illuminate\Http\Request;
-use App\Models\jenispembayaran;
+use App\Models\JenisPembayaran;
 use App\Models\DetailPembayaran;
 use App\Models\PembayaranHistory;
 use App\Models\DaftarUlangHistory;
@@ -23,7 +23,7 @@ class LaporanController extends Controller
 {
     $daftarTahunAjaran = TahunAjaran::all();
     $daftarKelas = Kelas::all();
-    $jenisPembayaranList = Jenispembayaran::all();
+    $jenisPembayaranList = JenisPembayaran::all();
     return view('laporan.index', compact('daftarTahunAjaran', 'daftarKelas', 'jenisPembayaranList'));
 }
 
@@ -50,7 +50,7 @@ public function detail(Request $request)
         $tanggal_dari = $request->input('tanggal_dari');
         $tanggal_sampai = $request->input('tanggal_sampai');
 
-        $jenisList = jenispembayaran::orderBy('nama')->get();
+        $jenisList = JenisPembayaran::orderBy('nama')->get();
         $kelasList = Kelas::orderBy('nama_kelas')->get(); // gunakan nama_kelas jika field nama tidak ada
 
         $startDate = $tanggal_dari ? $tanggal_dari . ' 00:00:00' : null;
@@ -383,7 +383,7 @@ public function detail(Request $request)
     $jenisPembayaranId = $request->input('jenis_pembayaran_id'); // Ambil dari request
     $daftarTahunAjaran = TahunAjaran::all();
     $daftarKelas = Kelas::all();
-    $jenisPembayaranList = jenispembayaran::all();
+    $jenisPembayaranList = JenisPembayaran::all();
 
     $rekapList = collect();
 
