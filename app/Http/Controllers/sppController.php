@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Siswa;
-use App\Models\tahunajaran;
+use App\Models\TahunAjaran;
 use Illuminate\Http\Request;
 use App\Models\jenispembayaran;
 use App\Models\PengaturanKelas;
