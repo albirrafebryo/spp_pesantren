@@ -20,6 +20,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Auth::loginUsingId(id:1);
+        // Auth::loginUsingId(id:1);
     }
 }
