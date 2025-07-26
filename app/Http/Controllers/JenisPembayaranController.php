@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\jenispembayaran;
+use App\Models\JenisPembayaran;
 
 class JenisPembayaranController extends Controller
 {
@@ -13,7 +13,7 @@ class JenisPembayaranController extends Controller
     public function index()
     {
         // PAGINASI 10, dan urut alfabet!
-        $jenispembayarans = jenispembayaran::orderBy('nama', 'asc')->paginate(10);
+        $jenispembayarans = JenisPembayaran::orderBy('nama', 'asc')->paginate(10);
         return view('jenispembayaran.index', compact('jenispembayarans'));
     }
 
@@ -26,7 +26,7 @@ class JenisPembayaranController extends Controller
             'nama' => 'required|string|max:100',
             'tipe' => 'required|in:0,1',
         ]);
-        jenispembayaran::create([
+        JenisPembayaran::create([
             'nama' => $request->nama,
             'tipe' => $request->tipe,
         ]);
@@ -42,7 +42,7 @@ class JenisPembayaranController extends Controller
             'nama' => 'required|string|max:100',
             'tipe' => 'required|in:0,1',
         ]);
-        $jenis = jenispembayaran::findOrFail($id);
+        $jenis = JenisPembayaran::findOrFail($id);
         $jenis->update([
             'nama' => $request->nama,
             'tipe' => $request->tipe,
@@ -55,7 +55,7 @@ class JenisPembayaranController extends Controller
      */
     public function destroy($id)
     {
-        $jenis = jenispembayaran::findOrFail($id);
+        $jenis = JenisPembayaran::findOrFail($id);
         $jenis->delete();
         return redirect()->route('jenispembayaran.index')->with('success', 'Jenis pembayaran berhasil dihapus!');
     }

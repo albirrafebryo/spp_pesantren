@@ -8,7 +8,7 @@ use App\Models\Siswa;
 use App\Models\Pembayaran;
 use App\Models\TahunAjaran;
 use Illuminate\Http\Request;
-use App\Models\jenispembayaran;
+use App\Models\JenisPembayaran;
 use App\Models\TabunganHistory;
 use App\Models\DetailPembayaran;
 use App\Models\PembayaranHistory;
@@ -31,7 +31,7 @@ class PembayaranHistoryController extends Controller
             })->get()
             : [];
 
-        $jenisPembayaranList = jenispembayaran::all();
+        $jenisPembayaranList = JenisPembayaran::all();
         $selectedJenisPembayaran = $jenisPembayaranId ?? ($jenisPembayaranList->first()->id ?? null);
 
         // Ambil rekap hanya satu baris per siswa per jenis pembayaran

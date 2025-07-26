@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\TahunAjaran;
 use Illuminate\Http\Request;
-use App\Models\jenispembayaran;
+use App\Models\JenisPembayaran;
 use App\Models\DetailPembayaran;
 
 class DetailPembayaranController extends Controller
@@ -16,7 +16,7 @@ class DetailPembayaranController extends Controller
     {
         $DetailPembayarans = DetailPembayaran::with(['tahunAjaran', 'jenisPembayaran'])->get();
         $tahunAjarans = TahunAjaran::orderBy('nama')->get();
-        $jenisPembayarans = jenispembayaran::all();
+        $jenisPembayarans = JenisPembayaran::all();
 
         // Siapkan $angkatanList: [ [ 'id' => id_tahun_ajaran, 'label' => "1 (2024/2025)" ], ... ]
         $angkatanList = [];

@@ -13,7 +13,7 @@
     use App\Models\HistoryKelas;
     use Illuminate\Http\Request;
     use App\Models\BuktiPembayaran;
-    use App\Models\jenispembayaran;
+    use App\Models\JenisPembayaran;
     use App\Models\DetailPembayaran;
     use App\Models\PembayaranHistory;
     use App\Models\DaftarUlang;
@@ -198,7 +198,7 @@ $jenisBulanan = ['spp', 'laundry'];
                         $headersPetugas[] = $row;
                         continue;
                     }
-                    $jenis = jenispembayaran::where('nama', $row['jenis_pembayaran'])->first();
+                    $jenis = JenisPembayaran::where('nama', $row['jenis_pembayaran'])->first();
                     if ($jenis && $jenis->tipe == 1) {
                         $bulanan[] = $row;
                     }
@@ -441,7 +441,7 @@ $jenisBulanan = ['spp', 'laundry'];
                     $headersPetugas[] = $row;
                     continue;
                 }
-                $jenis = jenispembayaran::where('nama', $row['jenis_pembayaran'])->first();
+                $jenis = JenisPembayaran::where('nama', $row['jenis_pembayaran'])->first();
                 if ($jenis && $jenis->tipe == 1) {
                     $bulanan[] = $row;
                 }
@@ -593,7 +593,7 @@ $jenisBulanan = ['spp', 'laundry'];
         $pembayaranIds = [];
 
         // Ambil daftar ulang (tipe 0) di tabel jenis pembayaran
-        $jenisDaftarUlang = jenispembayaran::where('tipe', 0)
+        $jenisDaftarUlang = JenisPembayaran::where('tipe', 0)
             ->where('nama', 'like', 'daftar ulang%')
             ->pluck('nama')->map(fn($n) => strtolower($n))->toArray();
 

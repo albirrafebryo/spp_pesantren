@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Models\Kelas;
 use App\Models\Siswa;
 use App\Models\TahunAjaran;
-use App\Models\jenispembayaran;
+use App\Models\JenisPembayaran;
 use App\Models\HistoryKelas;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Arr;
@@ -43,7 +43,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Buat jenis pembayaran
-        jenispembayaran::insert([
+        JenisPembayaran::insert([
             ['nama' => 'SPP A6', 'tipe' => 1],
             ['nama' => 'Laundry A6', 'tipe' => 1],
             ['nama' => 'Daftar Ulang A6', 'tipe' => 0],
