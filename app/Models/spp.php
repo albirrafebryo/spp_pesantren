@@ -6,7 +6,7 @@ use App\Models\TahunAjaran;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-class spp extends Model
+class Spp extends Model
 {
     use HasFactory;
     protected $guarded = [];
@@ -23,6 +23,6 @@ class spp extends Model
 
     public function rincians()
     {
-        return $this->hasMany(Spprincian::class);
+        return $this->hasMany(SppRincian::class);
     }
 }
