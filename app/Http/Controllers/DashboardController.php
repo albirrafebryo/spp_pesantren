@@ -30,7 +30,7 @@ class DashboardController extends Controller
         // Card lain
         $totalKelas = Kelas::count();
         $totalSantri = Siswa::count();
-        $totalDataPembayaran = jenispembayaran::count();
+        $totalDataPembayaran = JenisPembayaran::count();
         $totalBendahara = User::role('petugas')->count();
         $totalWaliSantri = User::role('wali')->count();
 
