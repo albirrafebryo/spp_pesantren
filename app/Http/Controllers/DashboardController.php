@@ -10,7 +10,7 @@ use App\Models\DaftarUlang;
 use App\Models\TahunAjaran;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use App\Models\jenispembayaran;
+use App\Models\JenisPembayaran;
 use App\Models\DetailPembayaran;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
