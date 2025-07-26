@@ -19,13 +19,12 @@ class SiswaFactory extends Factory
     public function definition(): array
     {
         return [
-            'nisn' => fake()->numberBetween(100000, 999999),
-            'nis' => fake()->numberBetween(100000, 999999),
-            'nama' => fake()->name,
-            'kelas_id' => Kelas::inRandomOrder()->first()->id,
-            'alamat' => fake()->address,
-            'no_hp' => fake()->phoneNumber,
-            'spp_id' => spp::inRandomOrder()->first()->id,
+            // 'nisn' => $this->faker->unique()->numberBetween(100000, 999999),
+            // 'nis' => $this->faker->unique()->numberBetween(100000, 999999),
+            // 'nama' => fake()->name,
+            // 'kelas_id' => Kelas::inRandomOrder()->first()->id,
+            // 'alamat' => fake()->address,
+            // 'no_hp' => fake()->phoneNumber,
 
         ];
     }

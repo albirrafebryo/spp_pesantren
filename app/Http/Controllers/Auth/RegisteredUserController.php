@@ -27,24 +27,33 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function store(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+    public function store(Request $request)
+{
+    $request->validate([
+        'name' => 'required|string|max:255',
+        // Email atau username harus unik (di kolom email DB)
+        'email' => [
+            'required',
+            'string',
+            'max:255',
+            'unique:users,email',
+            // Custom rule: valid email atau minimal 3 karakter (username)
+            function($attribute, $value, $fail) {
+                if (!filter_var($value, FILTER_VALIDATE_EMAIL) && !preg_match('/^[a-zA-Z0-9_.-]{3,}$/', $value)) {
+                    $fail('Format email/username tidak valid');
+                }
+            }
+        ],
+        'password' => 'required|string|min:6|confirmed',
+    ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+    $user = User::create([
+        'name' => $request->name,
+        'email' => $request->email, // username/email tetap masuk ke kolom email
+        'password' => Hash::make($request->password),
+    ]);
 
-        event(new Registered($user));
-
-        Auth::login($user);
-
-        return redirect(route('dashboard', absolute: false));
-    }
+    $user->assignRole('wali');
+    return redirect()->route('login')->with('success', 'Registrasi berhasil! Silakan login.');
+}
 }

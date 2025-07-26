@@ -1,140 +1,214 @@
-<nav x-data="{ open: false }" class="bg-white border-b border-gray-100">
-    <!-- Primary Navigation Menu -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-            <div class="flex">
-                <!-- Logo -->
-                <div class="shrink-0 flex items-center">
-                    <a href="{{ route('dashboard') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-gray-800" />
-                    </a>
+<div x-data="$persist({ sidebarOpen: true }).as('sidebarState')" class="flex">
+
+    <!-- Sidebar -->
+    <aside
+        :class="sidebarOpen ? 'block translate-x-0' : 'hidden -translate-x-full'"
+        class="fixed sm:static sm:block bg-white w-72 h-screen p-6 z-50 sm:z-auto sm:relative transition-all duration-300 overflow-y-auto space-y-6 border-r border-gray-200"
+    >
+
+        {{-- <div class="flex items-center space-x-4 pb-4 border-b">
+            <img src="{{ asset('images/logo.jpg') }}" alt="Logo" class="h-12 w-auto" />
+            <span class="font-semibold text-gray-800 text-sm leading-tight">
+                Pondok Pesantren<br>Bilal bin Rabah
+            </span>
+        </div> --}}
+
+        <nav class="space-y-2 text-sm text-gray-700 font-medium">
+
+            @if (Auth::user()->hasRole('admin'))
+
+                <!-- Dashboard -->
+                <a href="{{ route('dashboard') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('dashboard') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-house-icon lucide-house"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    <span>Dashboard</span>
+                </a>
+
+                <a href="{{ route('users.index') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('users.index') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-cog-icon lucide-user-round-cog"><path d="m14.305 19.53.923-.382"/><path d="m15.228 16.852-.923-.383"/><path d="m16.852 15.228-.383-.923"/><path d="m16.852 20.772-.383.924"/><path d="m19.148 15.228.383-.923"/><path d="m19.53 21.696-.382-.924"/><path d="M2 21a8 8 0 0 1 10.434-7.62"/><path d="m20.772 16.852.924-.383"/><path d="m20.772 19.148.924.383"/><circle cx="10" cy="8" r="5"/><circle cx="18" cy="18" r="3"/></svg>
+                    <span>Kelola Pengguna</span>
+                </a>
+
+                <a href="{{ route('tahun_ajarans.index') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('tahun_ajarans.index') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-icon lucide-calendar"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+                    <span>Tahun Ajaran</span>
+                </a>
+
+                <!-- Kelola kelas -->
+                <div x-data="{ kelasOpen: $persist(true).as('kelolaKelas') }">
+                    <button @click="kelasOpen = !kelasOpen"
+                            class="w-full flex justify-between items-center px-3 py-2 hover:bg-gray-100 rounded transition">
+                        <span class="flex items-center space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-school-icon lucide-school"><path d="M14 22v-4a2 2 0 1 0-4 0v4"/><path d="m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10"/><path d="M18 5v17"/><path d="m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6"/><path d="M6 5v17"/><circle cx="12" cy="9" r="2"/></svg>
+                            <span>Kelola kelas</span>
+                        </span>
+                        <svg class="w-4 h-4 transform transition-transform"
+                             :class="{ 'rotate-90': kelasOpen }" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <div x-show="kelasOpen" x-cloak class="mt-2 space-y-1 text-gray-600 pl-10 flex flex-col">
+                        <x-nav-link :href="route('kelas.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('kelas.*')">Kelas</x-nav-link>
+                        <x-nav-link :href="route('pengaturan_kelas.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('pengaturan_kelas.*')">Pengaturan Kelas</x-nav-link>
+                    </div>
                 </div>
 
-                <!-- Navigation Links -->
-               <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                <!-- Kelola Santri -->
+                <div x-data="{ santriOpen: $persist(true).as('kelolasantri') }">
+                    <button @click="santriOpen = !santriOpen"
+                            class="w-full flex justify-between items-center px-3 py-2 hover:bg-gray-100 rounded transition">
+                        <span class="flex items-center space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+                            <span>Kelola santri</span>
+                        </span>
+                        <svg class="w-4 h-4 transform transition-transform"
+                             :class="{ 'rotate-90': santriOpen }" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <div x-show="santriOpen" x-cloak class="mt-2 space-y-1 text-gray-600 pl-10 flex flex-col">
+                        <x-nav-link :href="route('siswa.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('siswa.*')">Data Santri</x-nav-link>
+                    </div>
+                </div>
 
-    @if (Auth::user()->hasRole('admin'))
-        <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-            {{ __('Dashboard') }}
-        </x-nav-link>
+                <!-- Kelola Pembayaran -->
+                <div x-data="{ bayarOpen: $persist(false).as('kelolaPembayaran') }">
+                    <button @click="bayarOpen = !bayarOpen"
+                            class="w-full flex justify-between items-center px-3 py-2 hover:bg-gray-100 rounded transition">
+                        <span class="flex items-center space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-banknote-icon lucide-banknote"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
+                            <span>Kelola Pembayaran</span>
+                        </span>
+                        <svg class="w-4 h-4 transform transition-transform"
+                             :class="{ 'rotate-90': bayarOpen }" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <div x-show="bayarOpen" x-cloak class="mt-2 space-y-1 text-gray-600 pl-10 flex flex-col">
+                        <x-nav-link :href="route('jenispembayaran.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('jenispembayaran.*')">Jenis Pembayaran</x-nav-link>
+                        <x-nav-link :href="route('detailpembayaran.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('detailpembayaran.*')">Nominal Pembayaran</x-nav-link>
+                        <x-nav-link :href="route('spp.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('spp.*')">Data Pembayaran</x-nav-link>
+                    </div>
+                </div>
 
-        <x-nav-link :href="route('kelas.index')" :active="request()->routeIs('kelas.*')">
-            {{ __('Kelas') }}
-        </x-nav-link>
-       
-        <x-nav-link :href="route('spp.index')" :active="request()->routeIs('spp.*')">
-            {{ __('SPP') }}
-        </x-nav-link>
-        
+            @elseif (Auth::user()->hasRole('petugas'))
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold border-b pb-2">Bendahara</div>
+            <div class="flex flex-col space-y-2 pl-1 text-gray-700 text-sm">
 
-        <x-nav-link :href="route('siswa.index')" :active="request()->routeIs('siswa.*')">
-            {{ __('Data Siswa') }}
-        </x-nav-link>
+                <a href="{{ route('dashboard') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('dashboard') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-house-icon lucide-house"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    <span>Dashboard</span>
+                </a>
 
-        {{-- <x-nav-link :href="route('tabungan.index')" :active="request()->routeIs('tabungan.*')">
-            {{ __('Tabungan') }}
-        </x-nav-link>
+                <a href="{{ route('siswa.index') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('siswa.index') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+                    <span>Data Santri</span>
+                </a>
 
-        <x-nav-link :href="route('pembayaran.index')" :active="request()->routeIs('pembayaran.*')">
-            {{ __('Pembayaran SPP') }}
-        </x-nav-link> --}}
+                <a href="{{ route('pembayaran.index') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('pembayaran.index') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right-left-icon lucide-arrow-right-left"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                    <span>Pembayaran</span>
+                </a>
 
-        @elseif (Auth::user()->hasRole('petugas'))
-        
-        <x-nav-link :href="route('siswa.index')" :active="request()->routeIs('siswa.*')">
-            {{ __('Data Siswa') }}
-        </x-nav-link> 
+                <a href="{{ route('laporan.index') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('laporan.index') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-icon lucide-folder"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                    <span>Laporan</span>
+                </a>
 
-        {{-- <x-nav-link :href="route('tabungan.index')" :active="request()->routeIs('tabungan.*')">
-            {{ __('Tabungan') }}
-        </x-nav-link> --}}
+                {{-- <div x-data="{ transaksiOpen: $persist(false).as('transaksiMenu') }">
+                    <button @click="transaksiOpen = !transaksiOpen"
+                            class="w-full flex justify-between items-center px-3 py-2 hover:bg-gray-100 rounded transition">
+                        <span class="flex items-center space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right-left-icon lucide-arrow-right-left"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                            <span>Transaksi</span>
+                        </span>
+                        <svg class="w-4 h-4 transform transition-transform"
+                             :class="{ 'rotate-90': transaksiOpen }" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <div x-show="transaksiOpen" x-cloak class="mt-2 space-y-2 text-gray-600 pl-8 flex flex-col">
+                        <x-nav-link :href="route('pembayaran.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('pembayaran.index')">Input Pembayaran</x-nav-link>
+                        <x-nav-link :href="route('pembayaran.rekap')" @click="$root.sidebarOpen = false" :active="request()->routeIs('pembayaran.rekap')">Rekap Pembayaran</x-nav-link>
+                    </div>
+                </div> --}}
+                <!-- Laporan -->
+    {{-- <div x-data="{ laporanOpen: $persist(false).as('laporanMenu') }">
+        <button @click="laporanOpen = !laporanOpen"
+                class="w-full flex justify-between items-center px-3 py-2 hover:bg-gray-100 rounded transition">
+            <span class="flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-icon lucide-folder"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                <span>Laporan</span>
+            </span>
+            <svg class="w-4 h-4 transform transition-transform"
+                 :class="{ 'rotate-90': laporanOpen }" fill="none" stroke="currentColor"
+                 viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 5l7 7-7 7" />
+            </svg>
+        </button>
+        <div x-show="laporanOpen" x-cloak class="mt-2 space-y-2 text-gray-600 pl-8 flex flex-col">
+            <x-nav-link :href="route('laporan.bulanan')" @click="$root.sidebarOpen = false" :active="request()->routeIs('laporan.bulanan')">Laporan Bulanan</x-nav-link>
+            <x-nav-link :href="route('laporan.tahunan')" @click="$root.sidebarOpen = false" :active="request()->routeIs('laporan.tahunan')">Laporan Tahunan</x-nav-link>
+        </div>
+    </div>
+            </div> --}}
+            @endif
 
-        <x-nav-link :href="route('pembayaran.index')" :active="request()->routeIs('pembayaran.*')">
-            {{ __('Pembayaran SPP') }}
-        </x-nav-link> 
+            @if (Auth::user()->hasRole('wali'))
+                <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold border-b pb-2">Menu Wali</div>
+                <div class="flex flex-col space-y-2 pl-1 text-gray-700 text-sm">
 
-    @endif
+                    <a href="{{ route('dashboard') }}"
+                       @click="$root.sidebarOpen = false"
+                       class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('wali.dashboard') ? 'bg-gray-100 text-black' : '' }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-house-icon lucide-house"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                        <span>Dashboard</span>
+                    </a>
+
+                    <a href="{{ route('pembayaran.index') }}"
+                       @click="$root.sidebarOpen = false"
+                       class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('wali.pembayaran') ? 'bg-gray-100 text-black' : '' }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right-left-icon lucide-arrow-right-left"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                        <span>Pembayaran</span>
+                    </a>
+                    <a href="{{ route('laporan.index') }}"
+                   @click="$root.sidebarOpen = false"
+                   class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('siswa.*') ? 'bg-gray-100 text-black' : '' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-icon lucide-folder"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                    <span>Laporan</span>
+                    </a>
+                </div>
+            @endif
+        </nav>
+    </aside>
+
+    <!-- Hamburger Button (Mobile) -->
+    <div class="sm:hidden fixed top-4 left-4 z-50">
+        <button @click="sidebarOpen = !sidebarOpen"
+            class="text-gray-500 hover:text-gray-700 focus:outline-none focus:text-gray-700">
+            
+        </button>
+    </div>
 </div>
-
-            </div>
-
-            <!-- Settings Dropdown -->
-            <div class="hidden sm:flex sm:items-center sm:ms-6">
-                <x-dropdown align="right" width="48">
-                    <x-slot name="trigger">
-                        <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
-                            <div>{{ Auth::user()->name }}</div>
-
-                            <div class="ms-1">
-                                <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
-                        </button>
-                    </x-slot>
-
-                    <x-slot name="content">
-                        <x-dropdown-link :href="route('profile.edit')">
-                            {{ __('Profile') }}
-                        </x-dropdown-link>
-
-                        <!-- Authentication -->
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-
-                            <x-dropdown-link :href="route('logout')"
-                                    onclick="event.preventDefault();
-                                                this.closest('form').submit();">
-                                {{ __('Log Out') }}
-                            </x-dropdown-link>
-                        </form>
-                    </x-slot>
-                </x-dropdown>
-            </div>
-
-            <!-- Hamburger -->
-            <div class="-me-2 flex items-center sm:hidden">
-                <button @click="open = ! open" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out">
-                    <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                        <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        <path :class="{'hidden': ! open, 'inline-flex': open }" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Responsive Navigation Menu -->
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
-        <div class="pt-2 pb-3 space-y-1">
-            <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                {{ __('Dashboard') }}
-            </x-responsive-nav-link>
-        </div>
-
-        <!-- Responsive Settings Options -->
-        <div class="pt-4 pb-1 border-t border-gray-200">
-            <div class="px-4">
-                <div class="font-medium text-base text-gray-800">{{ Auth::user()->name }}</div>
-                <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email }}</div>
-            </div>
-
-            <div class="mt-3 space-y-1">
-                <x-responsive-nav-link :href="route('profile.edit')">
-                    {{ __('Profile') }}
-                </x-responsive-nav-link>
-
-                <!-- Authentication -->
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-
-                    <x-responsive-nav-link :href="route('logout')"
-                            onclick="event.preventDefault();
-                                        this.closest('form').submit();">
-                        {{ __('Log Out') }}
-                    </x-responsive-nav-link>
-                </form>
-            </div>
-        </div>
-    </div>
-</nav>

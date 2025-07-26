@@ -13,8 +13,10 @@ return new class extends Migration
     {
         Schema::create('spps', function (Blueprint $table) {
             $table->id();
-            $table->string('tahun_ajaran');
-            $table->string('nominal');
+            $table->foreignId('tahun_ajaran_id')->constrained('tahun_ajarans')->onDelete('cascade');
+            $table->foreignId('jenispembayaran_id')->constrained('jenispembayarans')->onDelete('cascade');
+            $table->integer('nominal'); // nominal pembayaran
+            $table->string('tipe');     // 'Bulanan' atau 'Bebas'
             $table->timestamps();
         });
     }

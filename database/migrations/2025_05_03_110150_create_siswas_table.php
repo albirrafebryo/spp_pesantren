@@ -13,13 +13,15 @@ return new class extends Migration
     {
         Schema::create('siswas', function (Blueprint $table) {
             $table->id();
-            $table->string('nisn')->unique();
+            $table->string('nisn')->nullable()->unique(); // <- nullable
             $table->string('nis')->unique();
             $table->string('nama');
             $table->foreignId('kelas_id')->constrained('kelas')->onDelete('cascade');
-            $table->text('alamat');
+            $table->foreignId('wali_id')->nullable()->constrained('users')->onDelete('set null'); // nullable
+            $table->text('alamat')->nullable(); // nullable
             $table->string('no_hp');
-            $table->foreignId('spp_id')->constrained('spps')->onDelete('cascade');
+            $table->foreignId('tahun_masuk')->constrained('tahun_ajarans')->onDelete('cascade');
+            $table->enum('status', ['aktif', 'lulus', 'keluar', 'mutasi'])->default('aktif');
             $table->timestamps();
         });
     }

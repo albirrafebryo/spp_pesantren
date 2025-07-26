@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Kelas;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Auth;  // Tambahkan ini
 
 class KelasController extends Controller
 {
@@ -14,12 +13,7 @@ class KelasController extends Controller
      */
     public function index()
     {
-        // Cek apakah pengguna memiliki peran admin
-        if (!Auth::user()->hasRole('admin')) {
-            return redirect()->route('dashboard')->with('error', 'Akses ditolak: Anda bukan admin.');
-        }
-
-        $kelas = Kelas::paginate(5);
+        $kelas = Kelas::paginate(6);
         return view('kelas.index', compact('kelas'));
     }
 
@@ -28,12 +22,7 @@ class KelasController extends Controller
      */
     public function create()
     {
-        // Cek apakah pengguna memiliki peran admin
-        if (!Auth::user()->hasRole('admin')) {
-            return redirect()->route('dashboard')->with('error', 'Akses ditolak: Anda bukan admin.');
-        }
-
-        return view('kelas.create');
+        //
     }
 
     /**
@@ -41,20 +30,22 @@ class KelasController extends Controller
      */
     public function store(Request $request)
     {
-        // Cek apakah pengguna memiliki peran admin
-        if (!Auth::user()->hasRole('admin')) {
-            return redirect()->route('dashboard')->with('error', 'Akses ditolak: Anda bukan admin.');
-        }
-
         $request->validate([
             'nama_kelas' => 'required|string|max:255',
         ]);
 
+        $jenjang = $this->tentukanJenjang($request->nama_kelas); // Tentukan jenjang otomatis
+
         $kelas = Kelas::create([
             'nama_kelas' => $request->nama_kelas,
+            
         ]);
 
-        return redirect()->route('kelas.index')->with('success', 'Data Kelas Berhasil Ditambahkan.');
+        if ($kelas) {
+            return redirect()->route('kelas.index')->with('success', 'Data Kelas Berhasil Ditambahkan.');
+        } else {
+            return redirect()->route('kelas.index')->with('error', 'Data Kelas Tidak Dapat Ditambahkan.');
+        }
     }
 
     /**
@@ -62,13 +53,7 @@ class KelasController extends Controller
      */
     public function show(string $id)
     {
-        // Cek apakah pengguna memiliki peran admin
-        if (!Auth::user()->hasRole('admin')) {
-            return redirect()->route('dashboard')->with('error', 'Akses ditolak: Anda bukan admin.');
-        }
-
-        $kelas = Kelas::findOrFail($id);
-        return view('kelas.show', compact('kelas'));
+        //
     }
 
     /**
@@ -76,13 +61,7 @@ class KelasController extends Controller
      */
     public function edit(string $id)
     {
-        // Cek apakah pengguna memiliki peran admin
-        if (!Auth::user()->hasRole('admin')) {
-            return redirect()->route('dashboard')->with('error', 'Akses ditolak: Anda bukan admin.');
-        }
-
-        $kelas = Kelas::findOrFail($id);
-        return view('kelas.edit', compact('kelas'));
+        //
     }
 
     /**
@@ -90,17 +69,13 @@ class KelasController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        // Cek apakah pengguna memiliki peran admin
-        if (!Auth::user()->hasRole('admin')) {
-            return redirect()->route('dashboard')->with('error', 'Akses ditolak: Anda bukan admin.');
-        }
-
         $request->validate([
             'nama_kelas' => 'required|string|max:255',
         ]);
 
         $kelas = Kelas::findOrFail($id);
         $kelas->nama_kelas = $request->nama_kelas;
+        $kelas->jenjang = $this->tentukanJenjang($request->nama_kelas); // Update jenjang juga
         $kelas->save();
 
         return redirect()->route('kelas.index')->with('success', 'Data kelas berhasil diperbarui!');
@@ -111,14 +86,26 @@ class KelasController extends Controller
      */
     public function destroy(string $id)
     {
-        // Cek apakah pengguna memiliki peran admin
-        if (!Auth::user()->hasRole('admin')) {
-            return redirect()->route('dashboard')->with('error', 'Akses ditolak: Anda bukan admin.');
-        }
-
         $kelas = Kelas::findOrFail($id);
         $kelas->delete();
 
         return redirect()->route('kelas.index')->with('success', 'Data kelas berhasil dihapus!');
+    }
+
+    /**
+     * Fungsi bantu untuk menentukan jenjang berdasarkan nama_kelas.
+     */
+    private function tentukanJenjang($namaKelas)
+    {
+        preg_match('/\d+/', $namaKelas, $matches);
+        $angka = isset($matches[0]) ? (int)$matches[0] : null;
+
+        if ($angka >= 7 && $angka <= 9) {
+            return 'smp';
+        } elseif ($angka >= 10 && $angka <= 12) {
+            return 'sma';
+        }
+
+        return null; // Default jika tidak sesuai
     }
 }

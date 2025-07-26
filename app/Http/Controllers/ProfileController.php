@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\ProfileUpdateRequest;
-use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\View\View;
+use App\Http\Requests\ProfileUpdateRequest;
 
 class ProfileController extends Controller
 {
@@ -36,6 +37,27 @@ class ProfileController extends Controller
 
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }
+
+    public function updatePhoto(Request $request)
+{
+    $request->validate([
+        'profile_photo' => 'nullable|image|max:2048',
+    ]);
+
+    $user = auth()->user();
+
+    if ($request->hasFile('profile_photo')) {
+        if ($user->profile_photo && Storage::exists($user->profile_photo)) {
+            Storage::delete($user->profile_photo);
+        }
+
+        $path = $request->file('profile_photo')->store('profile-photos', 'public');
+        $user->profile_photo = $path;
+        $user->save();
+    }
+
+    return back()->with('status', 'Foto profil berhasil diperbarui.');
+}
 
     /**
      * Delete the user's account.

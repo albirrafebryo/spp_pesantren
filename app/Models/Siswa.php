@@ -9,22 +9,51 @@ class Siswa extends Model
 {
     use HasFactory;
 
-    // protected $table = 'siswas';
     protected $guarded = [];
 
+    // Relasi ke kelas
     public function kelas()
     {
         return $this->belongsTo(Kelas::class, 'kelas_id');
     }
 
-    public function spp()
+    public function pengaturanKelas()
+{
+    return $this->hasMany(PengaturanKelas::class, 'siswa_id');
+}
+
+    // Relasi ke tahun ajaran (tahun masuk)
+    public function tahunAjaranMasuk()
     {
-        return $this->belongsTo(Spp::class, 'spp_id');
+        return $this->belongsTo(TahunAjaran::class, 'tahun_masuk');
     }
 
-    // Relasi ke tabel pembayaran berdasarkan NISN
+     public function riwayatKelas()
+    {
+        return $this->hasMany(PengaturanKelas::class, 'siswa_id');
+    }
+
+    // Relasi ke pembayaran berdasarkan NISN
     public function pembayarans()
     {
-        return $this->hasMany(Pembayaran::class, 'nisn', 'nisn');
+        return $this->hasMany(Pembayaran::class, 'siswa_id');
+    }
+
+    public function historyKelas()
+    {
+    return $this->hasMany(HistoryKelas::class, 'siswa_id');
+    }
+    public function historyKelasTerbaru()
+    {
+    return $this->hasOne(HistoryKelas::class, 'siswa_id')->orderByDesc('tahun_ajaran_id');
+    }
+
+    public function wali()
+    {
+    return $this->belongsTo(User::class, 'wali_id');
+    }
+    public function tabungan()
+    {
+    return $this->hasMany(Tabungan::class, 'siswa_id');
     }
 }

@@ -20,8 +20,13 @@ class UserSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
-        $petugasRole = Role::firstOrCreate([
+        $petugasRole = Role::firstOrCreate([ // Ubah ke petugas
             'name' => 'petugas',
+            'guard_name' => 'web',
+        ]);
+
+        $waliRole = Role::firstOrCreate([
+            'name' => 'wali',
             'guard_name' => 'web',
         ]);
 
@@ -32,19 +37,43 @@ class UserSeeder extends Seeder
             'name' => 'Admin Pondok',
             'password' => Hash::make('password'),
         ]);
-
-        // Beri role admin ke user Admin
         $adminUser->assignRole($adminRole);
 
-        // Buat user Petugas
-        $petugasUser = User::firstOrCreate([
-            'email' => 'petugas@pondok.com',
+        // Buat user Bendahara (role = petugas, nama tetap Bendahara Pondok)
+        $bendaharaUser = User::firstOrCreate([
+            'email' => 'bendahara@pondok.com',
         ], [
-            'name' => 'Petugas Pondok',
+            'name' => 'Bendahara Pondok',
             'password' => Hash::make('password'),
         ]);
+        $bendaharaUser->assignRole($petugasRole); // Role pakai petugas
 
-        // Beri role petugas ke user Petugas
-        $petugasUser->assignRole($petugasRole);
+        // ======================= BUAT USER WALI ==========================
+        // $waliList = [
+        //     [
+        //         'name' => 'Wali A',
+        //         'email' => 'wali_a@pondok.com',
+        //     ],
+        //     [
+        //         'name' => 'Wali B',
+        //         'email' => 'wali_b@pondok.com',
+        //     ],
+        //     [
+        //         'name' => 'Wali C',
+        //         'email' => 'wali_c@pondok.com',
+        //     ],
+           
+        // ];
+
+        // foreach ($waliList as $wali) {
+        //     $userWali = User::firstOrCreate([
+        //         'email' => $wali['email'],
+        //     ], [
+        //         'name' => $wali['name'],
+        //         'password' => Hash::make('password'),
+        //     ]);
+        //     $userWali->assignRole($waliRole);
+        // }
+        // ======================= END USER WALI ===========================
     }
 }
