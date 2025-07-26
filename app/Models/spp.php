@@ -10,7 +10,6 @@ class Spp extends Model
 {
     use HasFactory;
     protected $guarded = [];
-
      public function tahunAjaran()
     {
         return $this->belongsTo(TahunAjaran::class);
