@@ -80,13 +80,15 @@
                     </div>
                 </div>
 
+                
+
                 <!-- Kelola Pembayaran -->
                 <div x-data="{ bayarOpen: $persist(false).as('kelolaPembayaran') }">
                     <button @click="bayarOpen = !bayarOpen"
                             class="w-full flex justify-between items-center px-3 py-2 hover:bg-gray-100 rounded transition">
                         <span class="flex items-center space-x-2">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-banknote-icon lucide-banknote"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
-                            <span>Kelola Pembayaran</span>
+                            <span>Kelola Data Pembayaran</span>
                         </span>
                         <svg class="w-4 h-4 transform transition-transform"
                              :class="{ 'rotate-90': bayarOpen }" fill="none" stroke="currentColor"
@@ -100,6 +102,13 @@
                         <x-nav-link :href="route('detailpembayaran.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('detailpembayaran.*')">Nominal Pembayaran</x-nav-link>
                         <x-nav-link :href="route('spp.index')" @click="$root.sidebarOpen = false" :active="request()->routeIs('spp.*')">Data Pembayaran</x-nav-link>
                     </div>
+                    <a href="{{ route('pembayaran.index') }}"
+                    @click="$root.sidebarOpen = false"
+                        class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 transition {{ request()->routeIs('pembayaran.index') ? 'bg-gray-100 text-black' : '' }}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right-left-icon lucide-arrow-right-left"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>
+                            </svg>
+                    <span>Kelola Pembayaran</span>
+                </a>
                 </div>
 
             @elseif (Auth::user()->hasRole('petugas'))

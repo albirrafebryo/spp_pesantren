@@ -25,7 +25,7 @@
         @endif
 
         {{-- Live Search Siswa khusus PETUGAS --}}
-        @if (Auth::user()->hasRole('petugas'))
+        @if (Auth::user()->hasRole('petugas') || Auth::user()->hasRole('admin'))
             <div class="mb-6 relative">
                 <input type="text" id="livesearchInput" placeholder="Cari NISN / NIS / Nama"
                     class="border border-green-400 px-4 py-2 rounded-xl w-full shadow focus:ring-2 focus:ring-green-400 bg-white/80 transition"
@@ -172,46 +172,88 @@
                                                             }
                                                         @endphp
                                                         <td class="border text-center min-w-[80px] py-1 px-1 bg-white group relative">
-                                                            @if($isBtn)
-                                                                <button
-                                                                    type="button"
-                                                                    class="w-20 py-1 text-xs rounded-lg text-center relative {{ $warna }} btn-pilih-tagihan transition"
-                                                                    data-tahun="{{ $r['tahun_ajaran'] }}"
-                                                                    data-jenis="{{ $r['jenis_pembayaran'] }}"
-                                                                    data-bulan="{{ $data['bulan_ke'] ?? '' }}"
-                                                                    data-bulan-label="{{ $b['label'] ?? '' }}"
-                                                                    data-nominal="{{ $data['nominal'] ?? 0 }}"
-                                                                    data-status="{{ $data['status'] ?? '-' }}"
-                                                                    data-dibayar="{{ $data['dibayar'] ?? 0 }}"
-                                                                    data-detail-pembayaran-id="{{ $r['detail_pembayaran_id'] ?? '' }}"
-                                                                    data-bukti-url="{{ $buktiUrl }}"
-                                                                    data-bukti-id="{{ $bukti?->id ?? '' }}"
-                                                                    {{ ($data['status'] === 'kosong' || $data['status'] === 'lunas') ? 'disabled' : '' }}>
-                                                                    {{ $nominal }}
-                                                                    @if(($data['status'] ?? '') === 'pending')
-                                                                        <span class="absolute top-0 right-1 text-[13px] font-bold text-white">
-                                                                        <i class="fa fa-exclamation-triangle"></i>
-                                                                    @endif
-                                                                </button>
-                                                                @if($bukti && $data['status']=='pending' && Auth::user()->hasRole('petugas'))
-                                                                    <button
-                                                                        type="button"
-                                                                        onclick="showModalValidasi(
-                                                                            '{{ $buktiUrl }}',
-                                                                            '{{ $bukti->id }}',
-                                                                            '{{ $data['nominal'] }}',
-                                                                            '{{ $data['status'] }}',
-                                                                            '{{ pathinfo($bukti->bukti, PATHINFO_EXTENSION) }}'
-                                                                        )"
-                                                                        class="underline text-green-600 text-xs block mt-1"
-                                                                    >
-                                                                        Validasi
-                                                                    </button>
-                                                                @endif
-                                                            @else
-                                                                <span>-</span>
-                                                            @endif
-                                                        </td>
+    @php
+        $isAdmin = Auth::user()->hasRole('admin');
+        $isPetugas = Auth::user()->hasRole('petugas');
+        $statusTagihan = $data['status'] ?? '';
+        $disableBtn = false;
+
+        // ADMIN: hanya disable jika status "belum"
+        if ($isAdmin) {
+            $disableBtn = ($statusTagihan === 'belum');
+        }
+        // PETUGAS: disable jika status "lunas"
+        elseif ($isPetugas) {
+            $disableBtn = ($statusTagihan === 'lunas');
+        }
+
+        $nominal = isset($data['nominal']) && $data['nominal'] ? number_format($data['nominal'], 0, ',', '.') : '-';
+        $isBtn = ($data && ($data['status'] ?? '') !== 'kosong');
+        $warna = match($data['status'] ?? '') {
+            'lunas' => 'bg-green-500 text-white hover:bg-green-600',
+            'cicilan' => 'bg-yellow-300 text-black hover:bg-yellow-400',
+            'nunggak' => 'bg-red-500 text-white hover:bg-red-600',
+            'pending' => 'bg-orange-500 text-white hover:bg-orange-600',
+            default => 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+        };
+        $bukti = null;
+        $buktiUrl = '';
+        if(isset($data['detail_pembayaran_id']) && $data['detail_pembayaran_id']) {
+            $pembayaran = $siswa->pembayarans->first(function($p) use($b, $r) {
+                return $p->detail_pembayaran_id == $r['detail_pembayaran_id'] && $p->bulan == $b['bulan'];
+            });
+            if($pembayaran && $pembayaran->buktiPembayarans->count()) {
+                $bukti = $pembayaran->buktiPembayarans->last();
+                $buktiUrl = asset('storage/' . $bukti->bukti);
+            }
+        }
+    @endphp
+
+    @if($isBtn)
+        <button
+            type="button"
+            class="w-20 py-1 text-xs rounded-lg text-center relative {{ $warna }} btn-pilih-tagihan transition"
+            data-tahun="{{ $r['tahun_ajaran'] }}"
+            data-jenis="{{ $r['jenis_pembayaran'] }}"
+            data-bulan="{{ $data['bulan_ke'] ?? '' }}"
+            data-bulan-label="{{ $b['label'] ?? '' }}"
+            data-nominal="{{ $data['nominal'] ?? 0 }}"
+            data-status="{{ $data['status'] ?? '-' }}"
+            data-dibayar="{{ $data['dibayar'] ?? 0 }}"
+            data-detail-pembayaran-id="{{ $r['detail_pembayaran_id'] ?? '' }}"
+            data-bukti-url="{{ $buktiUrl }}"
+            data-bukti-id="{{ $bukti?->id ?? '' }}"
+            @if($disableBtn)
+                disabled
+            @endif
+        >
+            {{ $nominal }}
+            @if(($data['status'] ?? '') === 'pending')
+                <span class="absolute top-0 right-1 text-[13px] font-bold text-white">
+                    <i class="fa fa-exclamation-triangle"></i>
+                </span>
+            @endif
+        </button>
+        @if($bukti && $data['status']=='pending' && Auth::user()->hasRole('petugas'))
+            <button
+                type="button"
+                onclick="showModalValidasi(
+                    '{{ $buktiUrl }}',
+                    '{{ $bukti->id }}',
+                    '{{ $data['nominal'] }}',
+                    '{{ $data['status'] }}',
+                    '{{ pathinfo($bukti->bukti, PATHINFO_EXTENSION) }}'
+                )"
+                class="underline text-green-600 text-xs block mt-1"
+            >
+                Validasi
+            </button>
+        @endif
+    @else
+        <span>-</span>
+    @endif
+</td>
+
                                                     @endforeach
                                                 </tr>
                                             @endif
@@ -387,70 +429,79 @@
 
             {{-- KERANJANG PEMBAYARAN --}}
             <div id="keranjang-wrap" class="mt-10 hidden">
-                <div class="bg-white/70 shadow rounded-2xl p-6 border border-green-100">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-xl font-bold text-green-800">Checkout Pembayaran</h3>
-                        <span id="keranjang-count" class="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full"></span>
-                    </div>
-                    <form action="{{ route('pembayaran.checkout') }}" method="POST" enctype="multipart/form-data" id="formCheckout">
-                        @csrf
-                        <input type="hidden" name="siswa_id" value="{{ $siswa->id }}">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-green-100 text-sm mb-4" id="tabelKeranjang">
-                                <thead class="bg-green-50">
-                                    <tr>
-                                        <th class="px-4 py-2 text-left font-semibold text-green-700">Tahun Ajaran</th>
-                                        <th class="px-4 py-2 text-left font-semibold text-green-700">Jenis</th>
-                                        <th class="px-4 py-2 text-left font-semibold text-green-700">Bulan</th>
-                                        <th class="px-4 py-2 text-right font-semibold text-green-700">Tagihan</th>
-                                        <th class="px-4 py-2 text-center font-semibold text-green-700">Status</th>
-                                        <th class="px-4 py-2 text-center font-semibold text-green-700">Input Nominal</th>
-                                        <th class="px-4 py-2 text-center font-semibold text-green-700">Aksi</th>
-                                        <th class="px-4 py-2 text-center font-semibold text-green-700">Bukti</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-green-100"></tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colspan="3"></td>
-                                        <td class="px-4 py-2 text-right font-semibold text-green-700">Total:</td>
-                                        <td colspan="3" class="px-4 py-2 text-left font-bold text-green-700" id="totalPembayaran">Rp 0</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                        {{-- Upload bukti hanya untuk wali --}}
-                        @if(Auth::user()->hasRole('wali'))
-                            <div class="mb-4 p-4 bg-green-50 rounded-lg border border-green-100">
-                                <h4 class="font-semibold mb-2 text-green-700">Rekening Pembayaran</h4>
-                                <ul class="text-sm text-green-700">
-                                    <li><b>No. Rekening:</b> 1234-5678-9012-3456</li>
-                                    <li><b>Atas Nama:</b> Yayasan Pondok Pesantren</li>
-                                </ul>
-                            </div>
-                            <div class="mt-4">
-                                <label class="block font-semibold mb-2 text-green-700">
-                                    Upload Bukti Pembayaran <span class="text-red-600">*</span>
-                                </label>
-                                <input type="file" name="bukti_pembayaran[]" id="buktiPembayaranInput"
-                                    accept="image/*,application/pdf" required
-                                    class="border rounded-lg p-2 w-full file:bg-green-100 file:border-0 file:rounded-md file:px-4 file:py-2"
-                                    multiple />
-                                <div id="previewBukti" class="mt-2 flex flex-wrap gap-2"></div>
-                            </div>
-                        @endif
-                        <div class="flex justify-end gap-2 mt-6">
-                            <button type="button" id="btnProsesPembayaran"
-                                class="bg-green-600 hover:bg-green-700 transition text-white px-8 py-2 rounded-xl shadow font-bold flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h2l1 2h13a1 1 0 00.8-1.6l-2-4A1 1 0 0016 6H6.21l-.94-2H2" />
-                                </svg>
-                                Proses Pembayaran
-                            </button>
-                        </div>
-                    </form>
-                </div>
+    <div class="bg-white/70 shadow rounded-2xl p-6 border border-green-100">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xl font-bold text-green-800">Checkout Pembayaran</h3>
+            <span id="keranjang-count" class="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full"></span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-green-100 text-sm mb-4" id="tabelKeranjang">
+                <thead class="bg-green-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left font-semibold text-green-700">Tahun Ajaran</th>
+                        <th class="px-4 py-2 text-left font-semibold text-green-700">Jenis</th>
+                        <th class="px-4 py-2 text-left font-semibold text-green-700">Bulan</th>
+                        <th class="px-4 py-2 text-right font-semibold text-green-700">Tagihan</th>
+                        <th class="px-4 py-2 text-center font-semibold text-green-700">Status</th>
+                        <th class="px-4 py-2 text-center font-semibold text-green-700">Input Nominal</th>
+                        <th class="px-4 py-2 text-center font-semibold text-green-700">Aksi</th>
+                        <th class="px-4 py-2 text-center font-semibold text-green-700">Bukti</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-green-100"></tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3"></td>
+                        <td class="px-4 py-2 text-right font-semibold text-green-700">Total:</td>
+                        <td colspan="3" class="px-4 py-2 text-left font-bold text-green-700" id="totalPembayaran">Rp 0</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        @if(Auth::user()->hasRole('wali'))
+            <div class="mb-4 p-4 bg-green-50 rounded-lg border border-green-100">
+                <h4 class="font-semibold mb-2 text-green-700">Rekening Pembayaran</h4>
+                <ul class="text-sm text-green-700">
+                    <li><b>No. Rekening:</b> 1234-5678-9012-3456</li>
+                    <li><b>Atas Nama:</b> Yayasan Pondok Pesantren</li>
+                </ul>
             </div>
+            <div class="mt-4">
+                <label class="block font-semibold mb-2 text-green-700">
+                    Upload Bukti Pembayaran <span class="text-red-600">*</span>
+                </label>
+                <input type="file" name="bukti_pembayaran[]" id="buktiPembayaranInput"
+                    accept="image/*,application/pdf" required
+                    class="border rounded-lg p-2 w-full file:bg-green-100 file:border-0 file:rounded-md file:px-4 file:py-2"
+                    multiple />
+                <div id="previewBukti" class="mt-2 flex flex-wrap gap-2"></div>
+            </div>
+        @endif
+
+        {{-- Tombol aksi --}}
+        <div class="flex justify-end gap-2 mt-6">
+            @if(Auth::user()->hasRole('admin'))
+    <button type="button" id="btnHapusPembayaran"
+        class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 focus:ring-2 focus:ring-red-400 focus:outline-none transition px-6 py-2 rounded-xl shadow font-bold text-white text-base"
+    >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+        <span>Hapus Pembayaran</span>
+    </button>
+            @elseif(!Auth::user()->hasRole('admin'))
+                <button type="button" id="btnProsesPembayaran"
+                    class="bg-green-600 hover:bg-green-700 transition text-white px-8 py-2 rounded-xl shadow font-bold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h2l1 2h13a1 1 0 00.8-1.6l-2-4A1 1 0 0016 6H6.21l-.94-2H2" />
+                    </svg>
+                    Proses Pembayaran
+                </button>
+            @endif
+        </div>
+    </div>
+</div>
+
         @else
             {{-- PETUGAS WAJIB CARI SISWA DULU --}}
             @if (Auth::user()->hasRole('petugas'))
@@ -496,7 +547,7 @@
 
         {{-- SCRIPT LIVESEARCH PETUGAS --}}
         <script>
-        @if (Auth::user()->hasRole('petugas'))
+        @if (Auth::user()->hasRole('petugas') || Auth::user()->hasRole('admin'))
             const input = document.getElementById('livesearchInput');
             const hasil = document.getElementById('livesearchHasil');
             let debounceTimeout = null;
@@ -563,6 +614,7 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
         <script>
     window.isPetugas = @json(Auth::user()->hasRole('petugas'));
+    window.isAdmin = @json(Auth::user()->hasRole('admin'));
 </script>
 
         {{-- Script Keranjang, Modal, dan Validasi: --}}
@@ -639,8 +691,58 @@ document.addEventListener('DOMContentLoaded', function() {
             text: 'Pembayaran sedang menunggu validasi bendahara.',
             confirmButtonText: 'OK',
             confirmButtonColor: '#15803D'
-        });
+        });        
     @endif
+
+    @if(Auth::user()->hasRole('admin'))
+    document.getElementById('btnHapusPembayaran')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (keranjang.length === 0) {
+            Swal.fire('Tidak ada pembayaran yang bisa dihapus!', '', 'info');
+            return;
+        }
+        Swal.fire({
+            title: 'Hapus Pembayaran?',
+            text: 'Pembayaran yang dihapus akan hilang dari sistem dan status tagihan kembali seperti semula.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, Hapus!',
+            cancelButtonText: 'Batal'
+        }).then(result => {
+            if (result.isConfirmed) {
+                fetch('{{ route("pembayaran.deletePembayaran") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        items: keranjang.map(item => ({
+                            detail_pembayaran_id: item.detailId,
+                            tahun: item.tahun,
+                            bulan: item.bulan
+                        }))
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire('Berhasil', 'Pembayaran berhasil dihapus!', 'success').then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire('Gagal', data.message || 'Gagal menghapus pembayaran!', 'error');
+                    }
+                })
+                .catch(err => {
+                    Swal.fire('Gagal', 'Terjadi error saat menghapus pembayaran.', 'error');
+                });
+            }
+        });
+    });
+    @endif
+
 });
 </script>
     </div>

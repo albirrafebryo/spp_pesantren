@@ -26,6 +26,15 @@ Route::middleware(['auth', 'role:admin|petugas|wali'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::put('/profile/photo', [ProfileController::class, 'updatePhoto'])->name('profile.photo.update');
+
+    Route::get('pembayaran', [PembayaranController::class, 'index'])->name('pembayaran.index');
+    Route::post('pembayaran/checkout', [PembayaranController::class, 'checkout'])->name('pembayaran.checkout');
+    // Route::get('/pembayaran/rekap', [PembayaranController::class, 'rekap'])->name('pembayaran.rekap');
+    Route::post('/pembayaran/verifikasi-bukti/{bukti_id}', [PembayaranController::class, 'verifikasiBukti'])->name('pembayaran.verifikasi-bukti');
+    Route::post('/pembayaran/update-status', [PembayaranController::class, 'updateStatus'])->name('pembayaran.updateStatus');
+    Route::post('/pembayaran/store-daftar-ulang', [PembayaranController::class, 'storeDaftarUlang'])->name('pembayaran.storeDaftarUlang');
+    Route::post('/pembayaran/setor-tarik-tabungan', [PembayaranController::class, 'setorTarikTabungan'])
+        ->name('pembayaran.setorTarikTabungan'); 
 });
 
 Route::get('/dashboard', [DashboardController::class, 'dashboard'])
@@ -71,6 +80,10 @@ Route::get('/siswa/search', [SiswaController::class, 'search'])->name('siswa.sea
     Route::post('/siswa/import', [SiswaController::class, 'import'])->name('siswa.import');
     Route::delete('/siswa/{id}', [SiswaController::class, 'destroy'])->name('siswa.destroy');
 
+    Route::get('/api/livesearch-siswa', [PembayaranController::class, 'livesearchSiswa'])->name('pembayaran.livesearch');
+    Route::post('pembayaran/delete-pembayaran', [PembayaranController::class, 'deletePembayaran'])->name('pembayaran.deletePembayaran');
+    Route::post('/pembayaran/deletePembayaran', [PembayaranController::class, 'deletePembayaran'])->name('pembayaran.deletePembayaran');
+
 });
 
 
@@ -80,19 +93,12 @@ Route::group(['middleware' => ['role:petugas']], function () {
     // Route::get('/siswa/search', [SiswaController::class, 'search'])->name('siswa.search');
     // Route::get('/siswa', [SiswaController::class, 'index'])->name('siswa.index');
 
-    Route::get('/api/livesearch-siswa', [PembayaranController::class, 'livesearchSiswa'])->name('pembayaran.livesearch');
+    
 
 });
 
 Route::middleware(['auth', 'role:petugas|wali'])->group(function () {
-    Route::get('pembayaran', [PembayaranController::class, 'index'])->name('pembayaran.index');
-    Route::post('pembayaran/checkout', [PembayaranController::class, 'checkout'])->name('pembayaran.checkout');
-    // Route::get('/pembayaran/rekap', [PembayaranController::class, 'rekap'])->name('pembayaran.rekap');
-    Route::post('/pembayaran/verifikasi-bukti/{bukti_id}', [PembayaranController::class, 'verifikasiBukti'])->name('pembayaran.verifikasi-bukti')->middleware('auth');
-    Route::post('/pembayaran/update-status', [PembayaranController::class, 'updateStatus'])->name('pembayaran.updateStatus');
-    Route::post('/pembayaran/store-daftar-ulang', [PembayaranController::class, 'storeDaftarUlang'])->name('pembayaran.storeDaftarUlang');
-    Route::post('/pembayaran/setor-tarik-tabungan', [PembayaranController::class, 'setorTarikTabungan'])
-        ->name('pembayaran.setorTarikTabungan'); 
+    
 
     Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
     Route::get('/laporan/detail', [LaporanController::class, 'detail'])->name('laporan.detail');

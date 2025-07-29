@@ -1,12 +1,10 @@
 <?php
 
+namespace App\Http\Controllers;
 
-
-    namespace App\Http\Controllers;
-
-    use Illuminate\Support\Facades\Log;
-    use App\Models\Kelas;
+use Illuminate\Support\Facades\Log;
     use App\Models\Siswa;
+    use App\Models\Kelas;
     use App\Models\Tabungan;
     use App\Models\Pembayaran;
     use App\Models\TahunAjaran;
@@ -24,6 +22,12 @@
 
     class PembayaranController extends Controller
     {
+        protected function denyIfAdmin($message = 'Admin tidak diizinkan melakukan aksi ini.')
+{
+    if (Auth::user()->hasRole('admin')) {
+        abort(403, $message);
+    }
+}
         public function index(Request $request)
     {
         $siswa = null;
@@ -263,7 +267,7 @@ $jenisBulanan = ['spp', 'laundry'];
         // ==== MODE PETUGAS ====
         $keyword = $request->input('keyword');
 
-        if (Auth::user()->hasRole('petugas')) {
+        if (Auth::user()->hasRole('petugas') || Auth::user()->hasRole('admin')) {
             if (!$keyword) {
                 return view('pembayaran.index', compact(
                     'siswa', 'tabelPembayaran', 'keranjang',
@@ -535,6 +539,7 @@ $jenisBulanan = ['spp', 'laundry'];
         'totalCicilanBulanan','totalCicilanPerJenis',
     ));
         }
+        abort(403, 'Akses tidak diizinkan');
     }
 
         public function livesearchSiswa(Request $request)
@@ -574,6 +579,7 @@ $jenisBulanan = ['spp', 'laundry'];
 
     public function checkout(Request $request)
     {
+        $this->denyIfAdmin();
         $isWali = Auth::user()->hasRole('wali');
         $rules = [
             'siswa_id' => 'required|exists:siswas,id',
@@ -785,6 +791,10 @@ $jenisBulanan = ['spp', 'laundry'];
 
     public function verifikasiBukti(Request $request, $bukti_id)
     {
+         if (!Auth::user()->hasRole('petugas')) {
+        abort(403, 'Akses hanya untuk petugas.');
+    }
+
         $request->validate([
             'status' => 'required|in:valid,invalid',
             'catatan_verifikasi' => 'nullable|string'
@@ -880,6 +890,7 @@ $jenisBulanan = ['spp', 'laundry'];
 
    public function updateStatus(Request $request)
 {
+    $this->denyIfAdmin();
     try {
         $detail = DetailPembayaran::find($request->detail_pembayaran_id);
         if (!$detail) {
@@ -1033,6 +1044,7 @@ protected function formatHp($noHp)
 
     public function storeDaftarUlang(Request $request)
 {
+    $this->denyIfAdmin();
     Log::info('Masuk ke StoreDaftarUlang', $request->all());
     $request->validate([
         'siswa_id' => 'required|exists:siswas,id',
@@ -1108,6 +1120,9 @@ protected function formatHp($noHp)
 
         public function setorTarikTabungan(Request $request)
     {
+        if (!Auth::user()->hasRole('petugas')) {
+        abort(403, 'Akses hanya untuk petugas.');
+    }
         // Validasi request
         $validated = $request->validate([
             'siswa_id' => 'required|exists:siswas,id',
@@ -1148,10 +1163,107 @@ protected function formatHp($noHp)
     }
         
         public function destroy($id)
-        {
-            $pembayaran = Pembayaran::findOrFail($id);
-            $pembayaran->delete();
+{
+    // Hanya admin & petugas yang boleh hapus pembayaran
+    if (!Auth::user()->hasRole('admin') && !Auth::user()->hasRole('petugas')) {
+        abort(403, 'Akses hanya untuk admin/petugas.');
+    }
 
-            return redirect()->back()->with('success', 'Data pembayaran berhasil dihapus.');
+    $pembayaran = Pembayaran::findOrFail($id);
+    $pembayaran->delete();
+
+    return redirect()->back()->with('success', 'Data pembayaran berhasil dihapus.');
+}
+
+public function deletePembayaran(Request $request)
+{
+    if (!Auth::user()->hasRole('admin')) {
+        return response()->json(['success' => false, 'message' => 'Akses hanya untuk admin!'], 403);
+    }
+
+    $request->validate([
+        'items' => 'required|array|min:1',
+        'items.*.detail_pembayaran_id' => 'required|integer|exists:detail_pembayarans,id',
+        'items.*.tahun' => 'required|string',
+        'items.*.bulan' => 'nullable',
+    ]);
+
+    DB::beginTransaction();
+    try {
+        foreach ($request->items as $item) {
+            // --- 1. Hapus Bulanan (cicilan bulanan, sudah dijelaskan sebelumnya) ---
+            $pembayaran = Pembayaran::where('detail_pembayaran_id', $item['detail_pembayaran_id'])
+                ->when(!empty($item['bulan']), function($q) use ($item) {
+                    $q->where('bulan', $item['bulan']);
+                })->first();
+
+            if ($pembayaran) {
+                $lastHistory = PembayaranHistory::where('pembayaran_id', $pembayaran->id)
+                    ->whereIn('status', ['cicilan', 'lunas'])
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($lastHistory) {
+                    $pembayaran->jumlah_bayar = max(0, ($pembayaran->jumlah_bayar ?? 0) - ($lastHistory->jumlah_bayar ?? 0));
+                    if ($pembayaran->jumlah_bayar >= $pembayaran->jumlah_tagihan) {
+                        $pembayaran->status = 'lunas';
+                    } elseif ($pembayaran->jumlah_bayar > 0) {
+                        $pembayaran->status = 'cicilan';
+                    } else {
+                        $pembayaran->status = 'belum';
+                    }
+                    $pembayaran->save();
+                    $lastHistory->delete();
+                } else {
+                    $pembayaran->delete();
+                }
+            }
+
+            // --- 2. Hapus Daftar Ulang (Bebas/Daftar Ulang) ---
+            // Cari data DaftarUlang utama
+            $tahunAjaran = $item['tahun'];
+            $detailId = $item['detail_pembayaran_id'];
+            $du = DaftarUlang::where('detail_pembayaran_id', $detailId)
+                ->whereHas('tahunAjaran', function($q) use ($tahunAjaran) {
+                    $q->where('nama', $tahunAjaran);
+                })->first();
+
+            if ($du) {
+                // Hapus history cicilan/angsuran terakhir
+                $lastHistory = DaftarUlangHistory::where('daftar_ulang_id', $du->id)
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($lastHistory) {
+                    // Kurangi jumlah_bayar di DaftarUlang utama
+                    $du->jumlah_bayar = max(0, ($du->jumlah_bayar ?? 0) - ($lastHistory->jumlah_bayar ?? 0));
+                    // Update status (lunas/cicilan/belum)
+                    if ($du->jumlah_bayar >= ($du->jumlah_tagihan ?? 0)) {
+                        $du->status = 'lunas';
+                    } elseif ($du->jumlah_bayar > 0) {
+                        $du->status = 'cicilan';
+                    } else {
+                        $du->status = 'belum';
+                    }
+                    $du->save();
+
+                    // Hapus history terakhir
+                    $lastHistory->delete();
+                } else {
+                    // Jika tidak ada history, hapus data utama
+                    $du->delete();
+                }
+            }
+
+            // --- 3. (Jika ada tabungan atau jenis lain, tambahkan logika di sini sesuai kebutuhan) ---
         }
+
+        DB::commit();
+        return response()->json(['success' => true, 'message' => 'Cicilan terakhir pembayaran/daftar ulang berhasil dihapus!']);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json(['success' => false, 'message' => 'Gagal hapus: '.$e->getMessage()], 500);
+    }
+}
+
     }
