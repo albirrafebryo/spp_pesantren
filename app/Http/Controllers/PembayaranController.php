@@ -902,8 +902,8 @@ $jenisBulanan = ['spp', 'laundry'];
         $jenisPembayaran = $detail ? strtolower($detail->jenisPembayaran->nama) : '';
         $isTabungan = strpos($jenisPembayaran, 'tabungan') !== false;
 
-        $isBebasAtauDaftarUlang = 
-            (strpos($jenisPembayaran, 'bebas') !== false) || 
+        $isBebasAtauDaftarUlang =
+            (strpos($jenisPembayaran, 'bebas') !== false) ||
             (strpos($jenisPembayaran, 'daftar ulang') !== false);
 
         if ($isBebasAtauDaftarUlang) {
@@ -925,6 +925,20 @@ $jenisBulanan = ['spp', 'laundry'];
 
         $siswa = Siswa::findOrFail($request->siswa_id);
 
+        $kelasNama = '-';
+if ($siswa->kelas && $siswa->kelas->nama_kelas) {
+    $kelasNama = $siswa->kelas->nama_kelas;
+} else {
+    $kelasTerakhir = \App\Models\HistoryKelas::where('siswa_id', $siswa->id)
+        ->with('kelas')
+        ->orderByDesc('tahun_ajaran_id')
+        ->orderByDesc('id')
+        ->first();
+    if ($kelasTerakhir && $kelasTerakhir->kelas && $kelasTerakhir->kelas->nama_kelas) {
+        $kelasNama = $kelasTerakhir->kelas->nama_kelas;
+    }
+}
+
         // Proses TABUNGAN
         if ($isTabungan) {
             $keterangan = $request->input('keterangan', 'setor');
@@ -943,19 +957,11 @@ $jenisBulanan = ['spp', 'laundry'];
                 'success' => true,
                 'message' => 'Tabungan berhasil disimpan.',
                 'no_hp'   => $this->formatHp($siswa->no_hp),
-                'pembayaran' => [
-                    'jenis' => $detail->jenisPembayaran->nama,
-                    'jumlah' => abs($request->jumlah),
-                    'status' => 'valid',
-                    'tahun_ajaran' => $request->tahunAjaran,
-                    'petugas' => Auth::user()->name ?? '-',
-                    'tanggal' => now()->format('d-m-Y'),
-                ],
-                'siswa' => [
-                    'nama' => $siswa->nama,
-                    'nis'  => $siswa->nis,
-                    'kelas_terakhir' => $siswa->kelas ? $siswa->kelas->nama : '-',
-                ]
+                'nama_siswa' => $siswa->nama,
+                'nis' => $siswa->nis,
+                'kelas_terakhir' => $kelasNama,
+                'petugas' => Auth::user()->name ?? '-',
+                'no_bukti' => null,
             ]);
         }
 
@@ -1003,22 +1009,11 @@ $jenisBulanan = ['spp', 'laundry'];
             'success' => true,
             'message' => 'Status dan jumlah pembayaran berhasil diperbarui.',
             'no_hp'   => $this->formatHp($siswa->no_hp),
-            'pembayaran' => [
-                'jenis' => $detail->jenisPembayaran->nama,
-                'jumlah' => $jumlahBaru,
-                'status' => $pembayaran->status,
-                'bulan' => $request->bulan,
-                'tahun_ajaran' => $request->tahunAjaran,
-                'total_bayar' => $pembayaran->jumlah_bayar,
-                'petugas' => Auth::user()->name ?? '-',
-                'tanggal' => now()->format('d-m-Y'),
-                'no_bukti' => $pembayaran->id,
-            ],
-            'siswa' => [
-                'nama' => $siswa->nama,
-                'nis'  => $siswa->nis,
-                'kelas_terakhir' => $siswa->kelas ? $siswa->kelas->nama : '-',
-            ]
+            'nama_siswa' => $siswa->nama,
+            'nis' => $siswa->nis,
+            'kelas_terakhir' => $kelasNama,
+            'petugas' => Auth::user()->name ?? '-',
+            'no_bukti' => $pembayaran->id,
         ]);
     } catch (\Exception $e) {
         Log::error('ERROR updateStatus', [

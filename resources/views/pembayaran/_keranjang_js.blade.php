@@ -469,41 +469,40 @@ if (btnSimpan) {
 
           const namaSiswa = infoWA?.nama_siswa || keranjang[0]?.nama_siswa || "-";
           const nis = infoWA?.nis || keranjang[0]?.nis || "-";
-          const kelasTerakhir = infoWA?.kelas_terakhir || keranjang[0]?.kelas_terakhir || "-";
+          const kelasTerakhir = infoWA?.kelas_terakhir || "-";
           const tglBayar = new Date().toLocaleDateString('id-ID');
           const metode = "Cash";
           const noBukti = infoWA?.no_bukti || "-";
           const petugas = infoWA?.petugas || "-";
           const totalFormat = "Rp. " + total.toLocaleString();
 
-          const pesan = `#info sistem
-#jangan dibalas
-
+          const pesan = `*#info sistem*\n*#jangan dibalas*\n
 Assalamualaikum Wr. Wb
 
-Pondok Pesantren Tahfizul Quran Bilal bin Rabah Sukoharjo
-============================
-TRANSAKSI PEMBAYARAN
+*Pondok Pesantren Tahfizul Quran Bilal bin Rabah Sukoharjo*
+==============================
+*TRANSAKSI PEMBAYARAN*
 
-Atas Nama      : ${namaSiswa}
-NIS            : ${nis}
-Kelas  : ${kelasTerakhir}
+• *Nama*     : ${namaSiswa}
+• *NIS*      : ${nis}
+• *Kelas*    : ${kelasTerakhir}
+• *Tgl Bayar*: ${tglBayar}
+• *No Bukti* : ${noBukti}
 
-Tgl bayar      : ${tglBayar}
-No Bukti       : ${noBukti}
+*Rincian Pembayaran*
+━━━━━━━━━━━━━━━━━━━━
+SPP          : ${spp}
+Laundry      : ${laundry}
+Daftar Ulang : ${daftarUlang}
+Tabungan     : ${tabungan}
+━━━━━━━━━━━━━━━━━━━━
+*Total*       : ${totalFormat}
 
-Rincian pembayaran :
-SPP            : ${spp}
-Laundry        : ${laundry}
-Daftar Ulang   : ${daftarUlang}
-Tabungan       : ${tabungan}
+Terima kasih, Bapak/Ibu telah menunaikan kewajibannya.
 
-Total          : ${totalFormat}
-
-Terima kasih, Bapak/Ibu telah menunaikan kewajibannya
-
-Petugas  
-${petugas}`;
+_Petugas_
+${petugas}
+`;
 
           Swal.fire({
             title: nomorWa ? 'Kirim info pembayaran ke WhatsApp?' : 'Pembayaran Berhasil',
@@ -514,11 +513,17 @@ ${petugas}`;
             cancelButtonText: nomorWa ? 'Tidak' : undefined,
           }).then((result) => {
             if (nomorWa && result.isConfirmed) {
-              window.open(`https://wa.me/${nomorWa}?text=${encodeURIComponent(pesan)}`, '_blank');
-              setTimeout(() => window.location.reload(), 1500);
-            } else {
-              window.location.reload();
-            }
+  let waUrl = "";
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    waUrl = `https://api.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
+  } else {
+    waUrl = `https://web.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
+  }
+  window.open(waUrl, '_blank');
+  setTimeout(() => window.location.reload(), 1500);
+} else {
+  window.location.reload();
+}
           });
         }).catch(async err => {
           let msg = 'Terjadi kesalahan saat menyimpan pembayaran.';

@@ -16,7 +16,7 @@
                 <img src="{{ asset('images/logo.png') }}" alt="Logo" class="object-contain w-20 h-20" style="max-width: 80px; max-height: 80px;" />
             </div>
         </div>
-        <h2 class="text-center text-2xl font-bold text-green-700 mb-7 mt-3">Login SPP</h2>
+        <h2 class="text-center text-2xl font-bold text-green-700 mb-7 mt-3">Login</h2>
         <!-- Form -->
         <form method="POST" action="{{ route('login') }}">
             @csrf
