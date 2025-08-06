@@ -402,48 +402,64 @@ if (btnSimpan) {
         const siswaId = {{ $siswa->id }};
         const bebasDaftarUlang = ['bebas', 'daftar ulang', 'daftar ulang a1', 'daftar ulang a2', 'daftar ulang a3'];
 
-        let promises = keranjang
-          .filter(item => {
-            let jenis = (item.jenis || '').toLowerCase();
-            if (item.isTabungan) return false; // skip tabungan
-            return item.bulan || jenis.includes('daftar ulang') || jenis === 'bebas';
-          })
-          .map(item => {
-            let jenis = (item.jenis || '').toLowerCase();
-            if (jenis.includes('daftar ulang') || jenis === 'bebas') {
-              return fetch('{{ route("pembayaran.storeDaftarUlang") }}', {
-                method: 'POST',
-                headers: {
-                  'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                  siswa_id: siswaId,
-                  tahun_ajaran: item.tahun,
-                  jenis: item.jenis,
-                  cicilan: parseInt(item.cicilan)
-                })
-              });
-            } else {
-              // Proses bulanan
-              return fetch('{{ route("pembayaran.updateStatus") }}', {
-                method: 'POST',
-                headers: {
-                  'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                  siswa_id: siswaId,
-                  detail_pembayaran_id: item.detailId,
-                  tahunAjaran: item.tahun,
-                  bulan: item.bulan,
-                  jumlah: parseInt(item.cicilan)
-                })
-              });
-            }
-          });
+       let promises = keranjang.map(item => {
+  let jenis = (item.jenis || '').toLowerCase();
+
+  // TABUNGAN
+  if (item.isTabungan) {
+    return fetch('{{ route("pembayaran.updateStatus") }}', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        siswa_id: siswaId,
+        detail_pembayaran_id: item.detailId,
+        tahunAjaran: item.tahun,
+        jumlah: parseInt(item.cicilan),
+        keterangan: item.status || item.keterangan // setor/ambil
+      })
+    });
+  }
+
+  // DAFTAR ULANG/BEBAS
+  if (jenis.includes('daftar ulang') || jenis === 'bebas') {
+    return fetch('{{ route("pembayaran.storeDaftarUlang") }}', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        siswa_id: siswaId,
+        tahun_ajaran: item.tahun,
+        jenis: item.jenis,
+        cicilan: parseInt(item.cicilan)
+      })
+    });
+  }
+
+  // BULANAN
+  return fetch('{{ route("pembayaran.updateStatus") }}', {
+    method: 'POST',
+    headers: {
+      'X-CSRF-TOKEN': '{{ csrf_token() }}',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      siswa_id: siswaId,
+      detail_pembayaran_id: item.detailId,
+      tahunAjaran: item.tahun,
+      bulan: item.bulan,
+      jumlah: parseInt(item.cicilan)
+    })
+  });
+});
+
 
         Promise.all(promises.map(p =>
           p.then(res => {
@@ -475,8 +491,76 @@ if (btnSimpan) {
           const noBukti = infoWA?.no_bukti || "-";
           const petugas = infoWA?.petugas || "-";
           const totalFormat = "Rp. " + total.toLocaleString();
+// === REKAP BULANAN (SPP/Laundry/dsb) ===
+let rekapPerJenis = {};
+let rekapDaftarUlang = [];
+let rekapTabungan = [];
 
-          const pesan = `*#info sistem*\n*#jangan dibalas*\n
+// Pisahkan jenis pembayaran
+keranjang.forEach(item => {
+  let j = (item.jenis || '').toLowerCase();
+  if (item.isTabungan) {
+    // Tabungan
+    rekapTabungan.push({
+      tahun: item.tahun,
+      nominal: parseInt(item.cicilan) || 0,
+      keterangan: item.status || item.keterangan // setor/ambil
+    });
+  } else if (/daftar.?ulang|bebas/.test(j)) {
+    // Daftar Ulang/Bebas
+    rekapDaftarUlang.push({
+      tahun: item.tahun,
+      jenis: item.jenis,
+      nominal: parseInt(item.cicilan) || 0,
+      status: item.status
+    });
+  } else {
+    // Bulanan (SPP/Laundry)
+    if (!rekapPerJenis[item.jenis]) rekapPerJenis[item.jenis] = [];
+    rekapPerJenis[item.jenis].push({
+      bulan: item.bulanLabel,
+      nominal: parseInt(item.cicilan) || 0,
+      status: item.status
+    });
+  }
+});
+
+// --- Format string rekap per jenis bulanan ---
+let strRekap = '*Rekap Pembayaran*\n━━━━━━━━━━━━━━━━━━━━\n';
+if (Object.keys(rekapPerJenis).length) {
+  Object.entries(rekapPerJenis).forEach(([jenis, list]) => {
+    strRekap += `*${jenis}*\n`;
+    list.forEach(item => {
+      let status = item.status.charAt(0).toUpperCase() + item.status.slice(1);
+      strRekap += `• ${item.bulan} : Rp. ${item.nominal.toLocaleString()} (${status})\n`;
+    });
+  });
+}
+
+// --- Daftar Ulang & Bebas ---
+if (rekapDaftarUlang.length) {
+  strRekap += `*Daftar Ulang/Bebas*\n`;
+  rekapDaftarUlang.forEach(du => {
+    let status = du.status ? du.status.charAt(0).toUpperCase() + du.status.slice(1) : '-';
+    strRekap += `• ${du.jenis} ${du.tahun} : Rp. ${du.nominal.toLocaleString()} (${status})\n`;
+  });
+}
+
+// --- Tabungan ---
+if (rekapTabungan.length) {
+  strRekap += `*Tabungan*\n`;
+  rekapTabungan.forEach(tab => {
+    let aksi = (tab.keterangan === 'ambil') ? 'Tarik' : 'Setor';
+    strRekap += `• ${aksi} ${tab.tahun} : Rp. ${tab.nominal.toLocaleString()}\n`;
+  });
+}
+
+if (!Object.keys(rekapPerJenis).length && !rekapDaftarUlang.length && !rekapTabungan.length) {
+  strRekap += '-\n';
+}
+
+// --- Gabungkan ke pesan utama ---
+const pesan = `*#info sistem*\n*#jangan dibalas*\n
 Assalamualaikum Wr. Wb
 
 *Pondok Pesantren Tahfizul Quran Bilal bin Rabah Sukoharjo*
@@ -489,12 +573,7 @@ Assalamualaikum Wr. Wb
 • *Tgl Bayar*: ${tglBayar}
 • *No Bukti* : ${noBukti}
 
-*Rincian Pembayaran*
-━━━━━━━━━━━━━━━━━━━━
-SPP          : ${spp}
-Laundry      : ${laundry}
-Daftar Ulang : ${daftarUlang}
-Tabungan     : ${tabungan}
+${strRekap}
 ━━━━━━━━━━━━━━━━━━━━
 *Total*       : ${totalFormat}
 
@@ -505,26 +584,40 @@ ${petugas}
 `;
 
           Swal.fire({
-            title: nomorWa ? 'Kirim info pembayaran ke WhatsApp?' : 'Pembayaran Berhasil',
-            text: nomorWa ? 'Ingin mengirim info pembayaran ke wali melalui WhatsApp Web?' : 'Pembayaran berhasil disimpan.',
-            icon: 'success',
-            showCancelButton: !!nomorWa,
-            confirmButtonText: nomorWa ? 'Ya, kirim!' : 'Tutup',
-            cancelButtonText: nomorWa ? 'Tidak' : undefined,
-          }).then((result) => {
-            if (nomorWa && result.isConfirmed) {
-  let waUrl = "";
-  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    waUrl = `https://api.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
+  title: nomorWa ? 'Kirim info pembayaran ke WhatsApp?' : 'Pembayaran Berhasil',
+  text: nomorWa ? 'Ingin mengirim info pembayaran ke wali melalui WhatsApp Web?' : 'Pembayaran berhasil disimpan.',
+  icon: 'success',
+  showCancelButton: !!nomorWa,
+  confirmButtonText: nomorWa ? 'Ya, kirim!' : 'Tutup',
+  cancelButtonText: nomorWa ? 'Tidak' : undefined,
+}).then((result) => {
+  if (nomorWa && result.isConfirmed) {
+    // Jika user pilih "Ya, kirim!" --> buka WhatsApp
+    let waUrl = "";
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      waUrl = `https://api.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
+    } else {
+      waUrl = `https://web.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
+    }
+    window.open(waUrl, '_blank');
+    setTimeout(() => window.location.reload(), 1500);
+  } else if (nomorWa && result.dismiss === Swal.DismissReason.cancel) {
+    // Jika user pilih "Tidak" --> tetap di web, tampil swal sukses
+    Swal.fire({
+      icon: 'success',
+      title: 'Pembayaran berhasil!',
+      text: 'Data pembayaran berhasil disimpan.',
+      timer: 1800,
+      showConfirmButton: false
+    }).then(() => {
+      window.location.reload();
+    });
   } else {
-    waUrl = `https://web.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
+    // Jika tidak ada nomor WA (fallback)
+    window.location.reload();
   }
-  window.open(waUrl, '_blank');
-  setTimeout(() => window.location.reload(), 1500);
-} else {
-  window.location.reload();
-}
-          });
+});
+
         }).catch(async err => {
           let msg = 'Terjadi kesalahan saat menyimpan pembayaran.';
           if (err.json) {
@@ -710,21 +803,25 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       let tahunAjaran = '';
-      let jenisTabungan = 'Tabungan';
+let jenisTabungan = 'Tabungan';
 
-      let jenisSelect = form.querySelector('select[name="detail_pembayaran_id"]');
-      if (jenisSelect) {
-        let opt = jenisSelect.options[jenisSelect.selectedIndex];
-        if (opt) {
-          let label = opt.textContent;
-          let split = label.split('-');
-          jenisTabungan = split[0]?.trim() || 'Tabungan';
-          tahunAjaran = split[1]?.trim() || '';
-        }
-      } else {
-        jenisTabungan = form.querySelector('[name="detail_pembayaran_id"]')?.dataset.jenis || 'Tabungan';
-        tahunAjaran = form.querySelector('[name="detail_pembayaran_id"]')?.dataset.tahun || '';
-      }
+let jenisSelect = form.querySelector('select[name="detail_pembayaran_id"]');
+if (jenisSelect) {
+  let opt = jenisSelect.options[jenisSelect.selectedIndex];
+  if (opt) {
+    jenisTabungan = opt.getAttribute('data-jenis') || (opt.textContent.split('-')[0]?.trim() || 'Tabungan');
+    tahunAjaran = opt.getAttribute('data-tahun') || (opt.textContent.split('-')[1]?.trim() || '');
+  }
+} else {
+  // Ambil dari div jika hanya 1 tabungan
+  let infoDiv = form.querySelector('.px-3.py-2.rounded-lg.border.bg-white.text-green-700.font-bold.shadow-sm');
+  if (infoDiv) {
+    let parts = infoDiv.innerText.split(' - ');
+    jenisTabungan = parts[0]?.trim() || 'Tabungan';
+    tahunAjaran = parts[1]?.trim() || '';
+  }
+}
+
 
       if (keranjang.some(k =>
         k.tahun === tahunAjaran &&

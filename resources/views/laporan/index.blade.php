@@ -513,7 +513,7 @@ body.sidebar-open #modalDetail .modal-content {
                                         });
                                         html += `</tbody></table>`;
                                     });
-                                } else if (tipe === 'bebas') {
+                                } else if (tipe === 'bebas' || tipe === 'daftar_ulang')  {
                                     detail.forEach(jenis => {
                                         html += `<h4 class="font-bold mt-2 mb-1">${jenis.nama_jenis}</h4>
                                             <table class="w-full text-sm border mb-2 bg-white/60 backdrop-blur rounded-xl">

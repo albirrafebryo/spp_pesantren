@@ -377,9 +377,13 @@
                     <label class="font-semibold block mb-1 text-green-700">Jenis Tabungan</label>
                     <select name="detail_pembayaran_id" class="border rounded-xl px-3 py-2 w-full focus:ring-2 focus:ring-green-400 bg-white shadow-sm font-semibold" required>
                         @foreach($tabungan as $row)
-                            <option value="{{ $row['detail_pembayaran_id'] }}">
-                                {{ $row['jenis_pembayaran'] }} - {{ $row['tahun_ajaran'] }}
-                            </option>
+<option 
+    value="{{ $row['detail_pembayaran_id'] }}"
+    data-jenis="{{ $row['jenis_pembayaran'] }}"
+    data-tahun="{{ $row['tahun_ajaran'] }}"
+  >
+    {{ $row['jenis_pembayaran'] }} - {{ $row['tahun_ajaran'] }}
+  </option>
                         @endforeach
                     </select>
                 </div>

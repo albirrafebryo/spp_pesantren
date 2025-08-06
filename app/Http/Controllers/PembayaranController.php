@@ -616,16 +616,15 @@ $jenisBulanan = ['spp', 'laundry'];
             if ($jenis === 'tabungan' || stripos($jenis, 'tabungan') !== false) {
                 try {
                     Tabungan::create([
-                        'siswa_id'      => $siswa->id,
-                        'tanggal'       => now(),
-                        'jenis'         => $item['keterangan'] ?? 'setor',
-                        'nominal'       => abs($item['cicilan']),
-                        'bulan'         => $item['bulan'] ?? null,
-                        'tahun_ajaran'  => $item['tahun_ajaran'],
-                        'user_id'       => Auth::id(),
-                        'keterangan'    => $item['keterangan'] ?? null,
-                        'status'        => 'valid',
-                    ]);
+    'siswa_id'              => $siswa->id,
+    'detail_pembayaran_id'  => $item['detail_pembayaran_id'], // WAJIB ADA!
+    'tanggal'               => now(),
+    'jenis'                 => $item['keterangan'] ?? 'setor',
+    'nominal'               => abs($item['cicilan']),
+    'user_id'               => Auth::id(),
+    'keterangan'            => $item['keterangan'] ?? null,
+    'status'                => 'valid',
+]);
                     $totalBayar += abs($item['cicilan']);
                 } catch (\Exception $e) {
                     // \Log::error('Gagal simpan tabungan', ['error' => $e->getMessage(), 'item' => $item]);
@@ -944,15 +943,15 @@ if ($siswa->kelas && $siswa->kelas->nama_kelas) {
             $keterangan = $request->input('keterangan', 'setor');
             if (!in_array($keterangan, ['setor', 'ambil'])) $keterangan = 'setor';
             Tabungan::create([
-                'siswa_id'     => $siswa->id,
-                'tanggal'      => now(),
-                'jenis'        => $keterangan,
-                'nominal'      => abs($request->jumlah),
-                'keterangan'   => $keterangan,
-                'tahun_ajaran' => $request->input('tahunAjaran'),
-                'status'       => 'valid',
-                'user_id'      => Auth::id(),
-            ]);
+    'siswa_id'              => $siswa->id,
+    'detail_pembayaran_id'  => $request['detail_pembayaran_id'], // WAJIB ADA!
+    'tanggal'               => now(),
+    'jenis'                 => $request['keterangan'] ?? 'setor',
+    'nominal'               => abs($request->jumlah),
+    'user_id'               => Auth::id(),
+    'keterangan'            => $request['keterangan'] ?? null,
+    'status'                => 'valid',
+]);
             return response()->json([
                 'success' => true,
                 'message' => 'Tabungan berhasil disimpan.',
