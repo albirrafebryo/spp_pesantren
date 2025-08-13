@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
     use App\Models\DaftarUlang;
     use App\Models\DaftarUlangHistory;
     use Illuminate\Support\Facades\DB;
-
+    use Illuminate\Support\Facades\Validator;
     use Illuminate\Support\Facades\Auth;
 
     class PembayaranController extends Controller
@@ -578,215 +578,264 @@ $jenisBulanan = ['spp', 'laundry'];
         }
 
     public function checkout(Request $request)
-    {
-        $this->denyIfAdmin();
-        $isWali = Auth::user()->hasRole('wali');
-        $rules = [
-            'siswa_id' => 'required|exists:siswas,id',
-            'items' => 'required|array|min:1',
-            'items.*.tahun_ajaran' => 'required|string',
-            'items.*.jenis' => 'required|string',
-            'items.*.cicilan' => 'required|numeric|min:1',
-        ];
-        if ($isWali) {
-            $rules['bukti_pembayaran'] = 'required';
-            $rules['bukti_pembayaran.*'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
+{
+    $this->denyIfAdmin();
+    $isWali = Auth::user()->hasRole('wali');
+
+    // Jika items dikirim sebagai JSON string (FormData.append('items', JSON.stringify(...)))
+    if ($request->has('items') && is_string($request->input('items'))) {
+        $decoded = json_decode($request->input('items'), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => 'Format items tidak valid (JSON).'], 422)
+                : back()->withErrors(['items' => 'Format items tidak valid (JSON).'])->withInput();
         }
-        $request->validate($rules);
+        $request->merge(['items' => $decoded]);
+    }
 
-        $siswa = Siswa::findOrFail($request->siswa_id);
-        $totalBayar = 0;
-        $pembayaranIds = [];
+    // Validasi (pakai Validator supaya bisa balas JSON saat AJAX)
+    $rules = [
+        'siswa_id' => 'required|exists:siswas,id',
+        'items' => 'required|array|min:1',
+        'items.*.tahun_ajaran' => 'required|string',
+        'items.*.jenis' => 'required|string',
+        'items.*.cicilan' => 'required|numeric|min:1',
+    ];
+    if ($isWali) {
+        $rules['bukti_pembayaran'] = 'required';
+        $rules['bukti_pembayaran.*'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
+    }
 
-        // Ambil daftar ulang (tipe 0) di tabel jenis pembayaran
-        $jenisDaftarUlang = JenisPembayaran::where('tipe', 0)
-            ->where('nama', 'like', 'daftar ulang%')
-            ->pluck('nama')->map(fn($n) => strtolower($n))->toArray();
+    $validator = Validator::make($request->all(), $rules);
+    if ($validator->fails()) {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+        return back()->withErrors($validator)->withInput();
+    }
 
-        foreach ($request->items as $idx => $item) {
-            $jenis = strtolower($item['jenis']);
-            $isBulanan = !in_array($jenis, array_merge($jenisDaftarUlang, ['tabungan', 'bebas']));
+    $siswa = Siswa::findOrFail($request->siswa_id);
+    $totalBayar = 0;
+    $pembayaranIds = [];
 
-            // Validasi untuk bulanan harus ada bulan
-            if ($isBulanan && empty($item['bulan'])) {
-                return back()->withErrors(["items.$idx.bulan" => 'Field bulan wajib diisi untuk pembayaran bulanan.'])->withInput();
+    // Ambil daftar ulang (tipe 0) di tabel jenis pembayaran
+    $jenisDaftarUlang = JenisPembayaran::where('tipe', 0)
+        ->where('nama', 'like', 'daftar ulang%')
+        ->pluck('nama')->map(fn($n) => strtolower($n))->toArray();
+
+    foreach ($request->items as $idx => $item) {
+        $jenis = strtolower($item['jenis']);
+        $isBulanan = !in_array($jenis, array_merge($jenisDaftarUlang, ['tabungan', 'bebas']));
+
+        // Validasi untuk bulanan harus ada bulan
+        if ($isBulanan && empty($item['bulan'])) {
+            $msg = 'Field bulan wajib diisi untuk pembayaran bulanan.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(["items.$idx.bulan" => $msg])->withInput();
+        }
+
+        // TABUNGAN
+        if ($jenis === 'tabungan' || stripos($jenis, 'tabungan') !== false) {
+            try {
+                Tabungan::create([
+                    'siswa_id'              => $siswa->id,
+                    'detail_pembayaran_id'  => $item['detail_pembayaran_id'] ?? null, // WAJIB ADA!
+                    'tanggal'               => now(),
+                    'jenis'                 => $item['keterangan'] ?? 'setor',
+                    'nominal'               => abs((int)$item['cicilan']),
+                    'user_id'               => Auth::id(),
+                    'keterangan'            => $item['keterangan'] ?? null,
+                    'status'                => 'valid',
+                ]);
+                $totalBayar += abs((int)$item['cicilan']);
+            } catch (\Exception $e) {
+                $msg = 'Gagal simpan tabungan';
+                return $request->expectsJson()
+                    ? response()->json(['success' => false, 'message' => $msg], 500)
+                    : back()->withErrors(['msg' => $msg])->withInput();
+            }
+            continue;
+        }
+
+        // --- DAFTAR ULANG / BEBAS ---
+        if (in_array($jenis, $jenisDaftarUlang)) {
+            $detail = DetailPembayaran::with('tahunAjaran', 'jenisPembayaran')
+                ->whereHas('tahunAjaran', function ($q) use ($item) {
+                    $q->where('nama', $item['tahun_ajaran']);
+                })
+                ->whereHas('jenisPembayaran', function ($q) use ($item) {
+                    $q->where('nama', $item['jenis']);
+                })
+                ->first();
+
+            if (!$detail) {
+                $msg = "Detail pembayaran untuk daftar ulang tidak ditemukan.";
+                return $request->expectsJson()
+                    ? response()->json(['success' => false, 'message' => $msg], 422)
+                    : back()->withErrors(["items.$idx" => $msg])->withInput();
             }
 
-            // TABUNGAN
-            if ($jenis === 'tabungan' || stripos($jenis, 'tabungan') !== false) {
-                try {
-                    Tabungan::create([
-    'siswa_id'              => $siswa->id,
-    'detail_pembayaran_id'  => $item['detail_pembayaran_id'], // WAJIB ADA!
-    'tanggal'               => now(),
-    'jenis'                 => $item['keterangan'] ?? 'setor',
-    'nominal'               => abs($item['cicilan']),
-    'user_id'               => Auth::id(),
-    'keterangan'            => $item['keterangan'] ?? null,
-    'status'                => 'valid',
-]);
-                    $totalBayar += abs($item['cicilan']);
-                } catch (\Exception $e) {
-                    // \Log::error('Gagal simpan tabungan', ['error' => $e->getMessage(), 'item' => $item]);
-                    return back()->withErrors(['msg' => 'Gagal simpan tabungan'])->withInput();
-                }
+            $tahunAjaranModel = TahunAjaran::where('nama', $item['tahun_ajaran'])->first();
+            if (!$tahunAjaranModel) {
+                $msg = "Tahun ajaran tidak ditemukan.";
+                return $request->expectsJson()
+                    ? response()->json(['success' => false, 'message' => $msg], 422)
+                    : back()->withErrors(["items.$idx" => $msg])->withInput();
+            }
+
+            $jumlah = (int)$item['cicilan'];
+            $nominalTagihan = $detail->nominal ?? 0;
+
+            $du = DaftarUlang::firstOrNew([
+                'siswa_id' => $siswa->id,
+                'tahun_ajaran_id' => $tahunAjaranModel->id,
+                'detail_pembayaran_id' => $detail->id,
+            ]);
+            if (is_null($du->jumlah_bayar)) $du->jumlah_bayar = 0;
+            $du->jumlah_tagihan = $nominalTagihan;
+            $du->jumlah_bayar = ($du->jumlah_bayar ?? 0) + $jumlah;
+            $du->status = ($du->jumlah_bayar >= $nominalTagihan) ? 'lunas' : 'cicilan';
+            $du->save();
+
+            DaftarUlangHistory::create([
+                'daftar_ulang_id' => $du->id,
+                'siswa_id' => $siswa->id,
+                'tahun_ajaran_id' => $tahunAjaranModel->id,
+                'detail_pembayaran_id' => $detail->id,
+                'jumlah_bayar' => $jumlah,
+                'status' => $du->status,
+                'keterangan' => ($du->status == 'lunas') ? 'Pelunasan' : 'Cicilan',
+                'tanggal_bayar' => now(),
+                'user_id' => Auth::id(),
+            ]);
+
+            $totalBayar += $jumlah;
+            continue;
+        }
+
+        // --- PEMBAYARAN BULANAN ---
+        if (empty($item['bulan'])) {
+            $msg = 'Field bulan wajib diisi untuk pembayaran bulanan.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(["items.$idx.bulan" => $msg])->withInput();
+        }
+
+        try {
+            $detail = DetailPembayaran::with('tahunAjaran', 'jenisPembayaran')
+                ->whereHas('tahunAjaran', fn($q) => $q->where('nama', $item['tahun_ajaran']))
+                ->whereHas('jenisPembayaran', fn($q) => $q->where('nama', $item['jenis']))
+                ->first();
+
+            if (!$detail) {
+                // Jika detail tidak ada, lewati item ini
                 continue;
             }
 
-            // --- DAFTAR ULANG ---
-            if (in_array($jenis, $jenisDaftarUlang)) {
-                // Cari detail pembayaran & tahun ajaran
-                $detail = DetailPembayaran::with('tahunAjaran', 'jenisPembayaran')
-                    ->whereHas('tahunAjaran', function ($q) use ($item) {
-                        $q->where('nama', $item['tahun_ajaran']);
-                    })
-                    ->whereHas('jenisPembayaran', function ($q) use ($item) {
-                        $q->where('nama', $item['jenis']);
-                    })
-                    ->first();
+            $bulan = (int)$item['bulan'];
+            $jumlah = (int)$item['cicilan'];
+            $nominalTagihan = $detail->nominal ?? 0;
 
-                if (!$detail) {
-                    return back()->withErrors(["items.$idx" => "Detail pembayaran untuk daftar ulang tidak ditemukan."]);
-                }
+            $pembayaran = Pembayaran::firstOrNew([
+                'siswa_id' => $siswa->id,
+                'detail_pembayaran_id' => $detail->id,
+                'tahun_ajaran_id' => $detail->tahun_ajaran_id,
+                'bulan' => $bulan,
+            ]);
 
-                $tahunAjaranModel = TahunAjaran::where('nama', $item['tahun_ajaran'])->first();
-                if (!$tahunAjaranModel) {
-                    return back()->withErrors(["items.$idx" => "Tahun ajaran tidak ditemukan."]);
-                }
+            $jumlahLama = $pembayaran->jumlah_bayar ?? 0;
+            $jumlahTotal = $jumlahLama + $jumlah;
 
-                $jumlah = (int)$item['cicilan'];
-                $nominalTagihan = $detail->nominal ?? 0;
-
-                // Store daftar ulang (sesuaikan field dengan tabel migration)
-                $du = DaftarUlang::firstOrNew([
-                    'siswa_id' => $siswa->id,
-                    'tahun_ajaran_id' => $tahunAjaranModel->id,
-                    'detail_pembayaran_id' => $detail->id,
-                ]);
-                $du->jumlah_tagihan = $nominalTagihan;
-                $du->jumlah_bayar = ($du->jumlah_bayar ?? 0) + $jumlah;
-                $du->status = ($du->jumlah_bayar >= $nominalTagihan) ? 'lunas' : 'cicilan';
-                $du->save();
-
-                // Store daftar ulang history
-                DaftarUlangHistory::create([
-                    'daftar_ulang_id' => $du->id,
-                    'siswa_id' => $siswa->id,
-                    'tahun_ajaran_id' => $tahunAjaranModel->id,
-                    'detail_pembayaran_id' => $detail->id,
-                    'jumlah_bayar' => $jumlah,
-                    'status' => $du->status,
-                    'keterangan' => ($du->status == 'lunas') ? 'Pelunasan' : 'Cicilan',
-                    'tanggal_bayar' => now(),
-                    'user_id' => Auth::id(),
-                ]);
-
-                $totalBayar += $jumlah;
+            if ($jumlahTotal > $nominalTagihan) {
+                // Lewati jika melebihi tagihan
                 continue;
             }
 
-            // PEMBAYARAN BULANAN
-            if (empty($item['bulan'])) {
-                return back()->withErrors(["items.$idx.bulan" => 'Field bulan wajib diisi untuk pembayaran bulanan.'])->withInput();
-            }
+            $pembayaran->jumlah_bayar = $jumlahTotal;
+            $pembayaran->jumlah_tagihan = $nominalTagihan;
+            $pembayaran->status = $isWali
+                ? 'pending'
+                : ($jumlahTotal >= $nominalTagihan ? 'lunas' : 'cicilan');
+            $pembayaran->save();
 
-            try {
-                $detail = DetailPembayaran::with('tahunAjaran', 'jenisPembayaran')
-                    ->whereHas('tahunAjaran', fn($q) => $q->where('nama', $item['tahun_ajaran']))
-                    ->whereHas('jenisPembayaran', fn($q) => $q->where('nama', $item['jenis']))
-                    ->first();
-                if (!$detail) {
-                    // \Log::warning('Detail pembayaran tidak ditemukan', $item);
-                    continue;
-                }
+            $pembayaranIds[] = $pembayaran->id;
 
-                $bulan = (int)$item['bulan'];
-                $jumlah = (int)$item['cicilan'];
-                $nominalTagihan = $detail->nominal ?? 0;
+            $countValid = PembayaranHistory::where('pembayaran_id', $pembayaran->id)
+                ->whereIn('status', ['cicilan', 'lunas'])
+                ->count();
 
-                $pembayaran = Pembayaran::firstOrNew([
-                    'siswa_id' => $siswa->id,
-                    'detail_pembayaran_id' => $detail->id,
-                    'tahun_ajaran_id' => $detail->tahun_ajaran_id,
-                    'bulan' => $bulan,
-                ]);
+            $histStatus = $isWali
+                ? 'pending'
+                : ($pembayaran->status == 'lunas' ? 'lunas' : 'cicilan');
+            $ket = $histStatus == 'lunas'
+                ? 'Pelunasan'
+                : 'Cicilan ke-' . ($countValid + 1);
 
-                $jumlahLama = $pembayaran->jumlah_bayar ?? 0;
-                $jumlahTotal = $jumlahLama + $jumlah;
+            PembayaranHistory::create([
+                'pembayaran_id'        => $pembayaran->id,
+                'siswa_id'             => $siswa->id,
+                'detail_pembayaran_id' => $detail->id,
+                'tahun_ajaran_id'      => $detail->tahun_ajaran_id,
+                'bulan'                => $bulan,
+                'jumlah_bayar'         => $jumlah,
+                'status'               => $histStatus,
+                'keterangan'           => $ket,
+                'tanggal_bayar'        => now(),
+                'user_id'              => Auth::id(),
+            ]);
 
-                if ($jumlahTotal > $nominalTagihan) {
-                    // \Log::warning('Pembayaran melebihi nominal tagihan', ['total' => $jumlahTotal, 'tagihan' => $nominalTagihan]);
-                    continue;
-                }
-
-                $pembayaran->jumlah_bayar = $jumlahTotal;
-                $pembayaran->jumlah_tagihan = $nominalTagihan;
-                $pembayaran->status = $isWali
-                    ? 'pending'
-                    : ($jumlahTotal >= $nominalTagihan ? 'lunas' : 'cicilan');
-                $pembayaran->save();
-
-                $pembayaranIds[] = $pembayaran->id;
-
-                $countValid = PembayaranHistory::where('pembayaran_id', $pembayaran->id)
-                    ->whereIn('status', ['cicilan', 'lunas'])
-                    ->count();
-
-                $histStatus = $isWali
-                    ? 'pending'
-                    : ($pembayaran->status == 'lunas' ? 'lunas' : 'cicilan');
-                $ket = $histStatus == 'lunas'
-                    ? 'Pelunasan'
-                    : 'Cicilan ke-' . ($countValid + 1);
-
-                PembayaranHistory::create([
-                    'pembayaran_id'        => $pembayaran->id,
-                    'siswa_id'             => $siswa->id,
-                    'detail_pembayaran_id' => $detail->id,
-                    'tahun_ajaran_id'      => $detail->tahun_ajaran_id,
-                    'bulan'                => $bulan,
-                    'jumlah_bayar'         => $jumlah,
-                    'status'               => $histStatus,
-                    'keterangan'           => $ket,
-                    'tanggal_bayar'        => now(),
-                    'user_id'              => Auth::id(),
-                ]);
-
-                $totalBayar += $jumlah;
-            } catch (\Exception $e) {
-                // \Log::error('Gagal simpan pembayaran bulanan', ['error' => $e->getMessage(), 'item' => $item]);
-                return back()->withErrors(['msg' => 'Gagal simpan pembayaran bulanan'])->withInput();
-            }
+            $totalBayar += $jumlah;
+        } catch (\Exception $e) {
+            $msg = 'Gagal simpan pembayaran bulanan';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 500)
+                : back()->withErrors(['msg' => $msg])->withInput();
         }
+    }
 
-        // Simpan bukti jika wali
-        if ($isWali && $request->hasFile('bukti_pembayaran')) {
-            try {
-                $files = $request->file('bukti_pembayaran');
-                foreach ($pembayaranIds as $pembayaran_id) {
-                    foreach ($files as $file) {
-                        $ext = $file->getClientOriginalExtension();
-                        $path = $file->storeAs('bukti_pembayaran', uniqid() . '.' . $ext, 'public');
-                        BuktiPembayaran::create([
-                            'pembayaran_id' => $pembayaran_id,
-                            'user_id' => Auth::id(),
-                            'bukti' => $path,
-                            'status' => 'pending',
-                        ]);
-                    }
+    // Simpan bukti jika wali
+    if ($isWali && $request->hasFile('bukti_pembayaran')) {
+        try {
+            $files = $request->file('bukti_pembayaran');
+            foreach ($pembayaranIds as $pembayaran_id) {
+                foreach ($files as $file) {
+                    $ext = $file->getClientOriginalExtension();
+                    $path = $file->storeAs('bukti_pembayaran', uniqid() . '.' . $ext, 'public');
+                    BuktiPembayaran::create([
+                        'pembayaran_id' => $pembayaran_id,
+                        'user_id' => Auth::id(),
+                        'bukti' => $path,
+                        'status' => 'pending',
+                    ]);
                 }
-            } catch (\Exception $e) {
-                // \Log::error('Gagal simpan bukti pembayaran', ['error' => $e->getMessage()]);
-                return back()->withErrors(['msg' => 'Gagal simpan bukti pembayaran'])->withInput();
             }
+        } catch (\Exception $e) {
+            $msg = 'Gagal simpan bukti pembayaran';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 500)
+                : back()->withErrors(['msg' => $msg])->withInput();
         }
+    }
 
-        return redirect()->route('pembayaran.index', [
-            'keyword' => $siswa->nisn
-        ])->with([
-            'waiting_validation' => true
+    // Respon akhir
+    if ($request->expectsJson()) {
+        return response()->json([
+            'success' => true,
+            'waiting_validation' => $isWali,
         ]);
     }
+
+    return redirect()->route('pembayaran.index', [
+        'keyword' => $siswa->nisn
+    ])->with([
+        'waiting_validation' => true
+    ]);
+}
 
     public function verifikasiBukti(Request $request, $bukti_id)
     {

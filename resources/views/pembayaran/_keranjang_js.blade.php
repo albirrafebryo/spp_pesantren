@@ -1,30 +1,33 @@
 <script>
 // ======== LOGIC KERANJANG & MODAL UNTUK WALI & PETUGAS ========
 
+// Flag role (fallback aman jika belum diset di tempat lain)
+window.isAdmin    = typeof window.isAdmin    === 'boolean' ? window.isAdmin    : false;
+window.isPetugas  = typeof window.isPetugas  === 'boolean' ? window.isPetugas  : false;
+window.isWali     = typeof window.isWali     === 'boolean' ? window.isWali     : ( !window.isAdmin && !window.isPetugas );
+
 // Inject data awal keranjang (dari backend)
 @if(isset($keranjang))
-    let keranjang = {!! json_encode($keranjang) !!};
+  let keranjang = {!! json_encode($keranjang) !!};
 @else
-    let keranjang = [];
+  let keranjang = [];
 @endif
 
 // Handler tombol pilih tagihan - PAKAI EVENT DELEGASI
 document.addEventListener('click', function(e) {
-  // 1) Hanya tombol “Pilih Tagihan”
   const btn = e.target.closest('.btn-pilih-tagihan');
   if (!btn) return;
 
-  // 2) Ambil status asli (raw) dari data-status
+  // Status asli (raw) dari table
   const statusRaw = (btn.dataset.status || '').toLowerCase();
 
-  // 3) Cek: kalau sudah ada yang pending di keranjang, 
-  //    maka hanya yang pending saja yang boleh masuk lagi
+  // Jika ada pending di keranjang: hanya pending yang boleh masuk (biar tidak campur)
   const hasPending = keranjang.some(k => k.rawStatus === 'pending');
   if (hasPending && statusRaw !== 'pending') {
     return alert('Masih ada pembayaran “pending”. Validasi dulu sebelum memilih tagihan lain.');
   }
 
-  // 4) Cegah duplikat entry yang sama
+  // Cegah duplikat
   const tahun = btn.dataset.tahun;
   const jenis = btn.dataset.jenis;
   const bulan = btn.dataset.bulan;
@@ -32,29 +35,30 @@ document.addEventListener('click', function(e) {
     return;
   }
 
-  // 5) Ambil data nominal, sudah dibayar, dan info lain
+  // Ambil data
   const nominal  = parseInt(btn.dataset.nominal)   || 0;
   const dibayar  = parseInt(btn.dataset.dibayar)   || 0;
   const detailId = btn.dataset.detailPembayaranId;
   const buktiUrl = btn.dataset.buktiUrl || '';
   const buktiId  = btn.dataset.buktiId  || null;
 
-  // Cek tabungan
+  // Tabungan?
   const isTabungan = (jenis || '').toLowerCase().includes('tabungan');
 
-  // 6) Tentukan apakah cicilan atau pelunasan penuh
+  // Default status + nilai cicilan awal
   let newStatus, cicilanValue;
   if (isTabungan) {
-  newStatus = 'setor';
-  cicilanValue = 0;
-} else if (statusRaw === 'pending') {
-  newStatus = dibayar < nominal ? 'cicilan' : 'lunas';
-  cicilanValue = dibayar;
-} else {
-  newStatus = 'lunas';
-  cicilanValue = nominal - dibayar; // otomatis isi sisa tagihan
-}
-  // 7) Push ke keranjang
+    newStatus = 'setor';
+    cicilanValue = 0;
+  } else if (statusRaw === 'pending') {
+    newStatus = dibayar < nominal ? 'cicilan' : 'lunas';
+    cicilanValue = dibayar;
+  } else {
+    // untuk awal: isi sisa. Nanti wali boleh ubah nominal, dan status auto menyesuaikan
+    newStatus = 'lunas';
+    cicilanValue = nominal - dibayar;
+  }
+
   keranjang.push({
     tahun:      tahun,
     jenis:      jenis,
@@ -69,29 +73,51 @@ document.addEventListener('click', function(e) {
     detailId:   detailId,
     buktiUrl:   buktiUrl,
     buktiId:    buktiId,
-    isTabungan: isTabungan // <--- TAMBAHAN
+    isTabungan: isTabungan
   });
 
-  // 8) Render ulang tabel keranjang
   renderKeranjang();
 });
 
 function formatRupiah(angka) {
-    if (!angka) angka = 0;
-    angka = angka.toString().replace(/[^,\d]/g, "");
-    let split = angka.split(",");
-    let sisa = split[0].length % 3;
-    let rupiah = split[0].substr(0, sisa);
-    let ribuan = split[0].substr(sisa).match(/\d{3}/gi);
-    if (ribuan) {
-        let separator = sisa ? "." : "";
-        rupiah += separator + ribuan.join(".");
-    }
-    rupiah = split[1] !== undefined ? rupiah + "," + split[1] : rupiah;
-    return rupiah ? "Rp. " + rupiah : "";
+  if (!angka) angka = 0;
+  angka = angka.toString().replace(/[^,\d]/g, "");
+  let split = angka.split(",");
+  let sisa = split[0].length % 3;
+  let rupiah = split[0].substr(0, sisa);
+  let ribuan = split[0].substr(sisa).match(/\d{3}/gi);
+  if (ribuan) {
+    let separator = sisa ? "." : "";
+    rupiah += separator + ribuan.join(".");
+  }
+  rupiah = split[1] !== undefined ? rupiah + "," + split[1] : rupiah;
+  return rupiah ? "Rp. " + rupiah : "";
 }
 function unformatRupiah(str) {
-    return parseInt((str || '').replace(/[^0-9]/g, "")) || 0;
+  return parseInt((str || '').replace(/[^0-9]/g, "")) || 0;
+}
+
+// --- helper: set label + hidden input status utk wali ---
+function applyStatusUI(idx, status) {
+  const label = document.getElementById(`status-label-${idx}`);
+  const hidden = document.getElementById(`status-hidden-${idx}`);
+  if (label)  label.innerText = status.charAt(0).toUpperCase() + status.slice(1);
+  if (hidden) hidden.value = status;
+}
+
+// --- hitung status otomatis utk wali berdasar nilai input ---
+function setStatusAuto_forWali(idx) {
+  const item = keranjang[idx];
+  if (!item || item.isTabungan) return;
+  const sisa = item.nominal - item.dibayar;
+  const nilai = parseInt(item.cicilan) || 0;
+
+  if (nilai === sisa) {
+    item.status = 'lunas';
+  } else {
+    item.status = 'cicilan';
+  }
+  applyStatusUI(idx, item.status);
 }
 
 function renderKeranjang() {
@@ -108,19 +134,25 @@ function renderKeranjang() {
   wrap.classList.remove('hidden');
 
   keranjang.forEach((item, idx) => {
-    total += item.cicilan;
+    total += (parseInt(item.cicilan) || 0);
 
-    // ======= Hanya dari wali (buktiId) yang harus readonly =======
-    const isFromWali    = !!item.buktiId;
-    const selectAttr    = isFromWali ? 'disabled' : '';
-    const inputAttr     = isFromWali ? 'readonly' : '';
-    const removeAttr    = isFromWali ? 'disabled' : '';
-    const inputNominalAttr = (window.isAdmin || item.isTabungan || item.status === 'lunas')
+    // readonly rules:
+    // - Admin: selalu readonly
+    // - Tabungan: readonly (biar via form tabungan)
+    // - Petugas: jika status lunas -> readonly (sesuai versi lama)
+    // - WALI: meskipun status lunas -> TIDAK readonly (sesuai request)
+    const shouldReadonly =
+      window.isAdmin ||
+      item.isTabungan ||
+      (window.isPetugas && item.status === 'lunas');
+    const inputNominalAttr = shouldReadonly
       ? 'readonly style="background:#f2f2f2;cursor:not-allowed;"'
-      : inputAttr;
+      : '';
 
+    // Kolom STATUS:
     let statusCell;
     if (item.isTabungan) {
+      // Tabungan
       if (window.isPetugas) {
         statusCell = `
           <select
@@ -139,60 +171,76 @@ function renderKeranjang() {
         `;
       }
     } else if (item.buktiId && item.status === 'pending') {
-      const label = item.cicilan < item.nominal ? 'Cicilan' : 'Lunas';
-      statusCell = `<span class="capitalize">${label}</span>`;
+      // ⬇️ Perbaikan: jika pending dari wali, PETUGAS tetap bisa memilih status
+      if (window.isPetugas) {
+        statusCell = `
+          <select
+            name="items[${idx}][status]"
+            onchange="ubahStatus(${idx}, this.value)"
+            class="w-32 h-10 border rounded-md px-2"
+            ${window.isAdmin ? 'disabled' : ''}
+          >
+            <option value="lunas"   ${item.status === 'lunas'   ? 'selected' : ''}>Lunas</option>
+            <option value="cicilan" ${item.status === 'cicilan' ? 'selected' : ''}>Cicilan</option>
+          </select>
+        `;
+      } else {
+        const label = item.cicilan < item.nominal ? 'Cicilan' : 'Lunas';
+        statusCell = `
+          <span class="capitalize">${label}</span>
+          <input type="hidden" name="items[${idx}][status]" value="${item.status}">
+        `;
+      }
     } else {
-      const statusDisabled = (window.isAdmin) ? 'disabled' : selectAttr;
-      statusCell = `
-        <select
-          name="items[${idx}][status]"
-          onchange="ubahStatus(${idx}, this.value)"
-          class="w-32 h-10 border rounded-md px-2"
-          ${statusDisabled}
-        >
-          <option value="lunas" ${item.status === 'lunas' ? 'selected' : ''}>Lunas</option>
-          <option value="cicilan" ${item.status === 'cicilan' ? 'selected' : ''}>Cicilan</option>
-        </select>
-      `;
+      if (window.isPetugas) {
+        // PETUGAS: boleh pilih status manual
+        statusCell = `
+          <select
+            name="items[${idx}][status]"
+            onchange="ubahStatus(${idx}, this.value)"
+            class="w-32 h-10 border rounded-md px-2"
+            ${window.isAdmin ? 'disabled' : ''}
+          >
+            <option value="lunas" ${item.status === 'lunas' ? 'selected' : ''}>Lunas</option>
+            <option value="cicilan" ${item.status === 'cicilan' ? 'selected' : ''}>Cicilan</option>
+          </select>
+        `;
+      } else {
+        // WALI: tidak bisa pilih, auto (pakai label + hidden)
+        statusCell = `
+          <span id="status-label-${idx}" class="capitalize">${item.status}</span>
+          <input id="status-hidden-${idx}" type="hidden" name="items[${idx}][status]" value="${item.status}">
+        `;
+      }
     }
 
-    // cicilan input
     const maxNom = item.sisa > 0 ? item.sisa : item.nominal;
     const val = (item.cicilan !== undefined && item.cicilan !== null) ? item.cicilan : item.nominal;
 
     // tombol hapus
     let removeBtn = '';
     if (window.isAdmin) {
-      removeBtn = `<button 
-        type="button" 
-        onclick="hapusItem(${idx})" 
-        class="text-red-600 font-bold hover:underline"
-      >Hapus</button>`;
+      removeBtn = `<button type="button" onclick="hapusItem(${idx})" class="text-red-600 font-bold hover:underline">Hapus</button>`;
     } else {
-      removeBtn = `<button 
-        type="button" 
-        onclick="hapusItem(${idx})" 
-        ${removeAttr} 
-        class="text-red-500 hover:underline"
-      >Hapus</button>`;
+      const removeAttr = item.buktiId ? 'disabled' : '';
+      removeBtn = `<button type="button" onclick="hapusItem(${idx})" ${removeAttr} class="text-red-500 hover:underline">Hapus</button>`;
     }
-    // tombol validasi (hanya tampil untuk petugas & pending dari wali)
+
+    // tombol validasi (hanya muncul utk entry pending dari wali)
     let buktiCell = '-';
     if (item.buktiId) {
       buktiCell = `<button
-                     type="button"
-                     onclick="showModalValidasi(
-                       '${item.buktiUrl}',
-                       '${item.buktiId}',
-                       '${item.cicilan}',
-                       '${item.status}',
-                       '${item.rawStatus}',           
-                       '${item.buktiUrl.split('.').pop()}'
-                     )"
-                     class="underline text-blue-600 text-xs"
-                   >
-                     Validasi
-                   </button>`;
+        type="button"
+        onclick="showModalValidasi(
+          '${item.buktiUrl}',
+          '${item.buktiId}',
+          '${item.cicilan}',
+          '${item.status}',
+          '${item.rawStatus}',
+          '${(item.buktiUrl||'').split('.').pop()}'
+        )"
+        class="underline text-blue-600 text-xs"
+      >Validasi</button>`;
     }
 
     tbody.innerHTML += `
@@ -212,8 +260,6 @@ function renderKeranjang() {
         <td>Rp ${item.nominal.toLocaleString()}</td>
         <td class="text-center">
           ${statusCell}
-          <!-- Untuk non-tabungan, hidden input status sudah ada di select -->
-          ${item.isTabungan ? '' : `<input type="hidden" name="items[${idx}][status]" value="${item.status}">`}
         </td>
         <td class="text-center">
           <input
@@ -225,10 +271,7 @@ function renderKeranjang() {
             class="w-24 md:w-32 h-10 border rounded-md px-2 text-center cicilan-input"
             id="cicilan-input-${idx}"
             ${inputNominalAttr}
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           />
           <div id="cicilan-error-${idx}" class="text-red-600 text-xs mt-1" style="display:none"></div>
         </td>
@@ -237,11 +280,10 @@ function renderKeranjang() {
       </tr>`;
   });
 
-  // Update total
   const elTotal = document.getElementById('totalPembayaran');
   if (elTotal) elTotal.innerText = 'Rp ' + total.toLocaleString();
 
-  // Bind ulang hanya untuk input yang **tidak** readonly
+  // Bind ulang input yang tidak readonly
   document.querySelectorAll('.cicilan-input').forEach(inp => {
     if (inp.hasAttribute('readonly')) return;
 
@@ -257,6 +299,7 @@ function renderKeranjang() {
       let numeric = unformatRupiah(this.value);
 
       if (keranjang[idx].isTabungan) {
+        // Tabungan bebas, tidak ada status auto
         errEl.innerText = '';
         errEl.style.display = 'none';
         const formatted = formatRupiah(numeric);
@@ -265,16 +308,19 @@ function renderKeranjang() {
         keranjang[idx].cicilan = numeric;
         updateTotal();
       } else {
-        if (numeric > max) {
-          errEl.innerText = 'Nominal tidak boleh melebihi sisa tagihan!';
+        const sisa = keranjang[idx].nominal - keranjang[idx].dibayar;
+
+        if (numeric > sisa) {
+          errEl.innerText = 'Nominal melebihi batas nominal!';
           errEl.style.display = 'block';
-          this.value = this.dataset.prev;
-        } else if (this.value === '' || isNaN(numeric)) {
-          this.value = this.dataset.prev || formatRupiah(max);
+          this.value = this.dataset.prev; // kembalikan
+          return;
+        }
+
+        if (this.value === '' || isNaN(numeric)) {
+          // kosong? kembalikan ke nilai sebelumnya
+          this.value = this.dataset.prev || formatRupiah(0);
           keranjang[idx].cicilan = unformatRupiah(this.value);
-          errEl.innerText = '';
-          errEl.style.display = 'none';
-          updateTotal();
         } else {
           errEl.innerText = '';
           errEl.style.display = 'none';
@@ -282,12 +328,24 @@ function renderKeranjang() {
           this.value = formatted;
           this.dataset.prev = formatted;
           keranjang[idx].cicilan = numeric;
-          updateTotal();
         }
+
+        // === WALI: status otomatis (cicilan/lunas) berdasarkan nilai ===
+        if (window.isWali) {
+          setStatusAuto_forWali(idx);
+        }
+
+        updateTotal();
       }
     });
   });
+
   updateTotal();
+
+  // Setelah render: pastikan label status wali sinkron
+  if (window.isWali) {
+    keranjang.forEach((_, i) => setStatusAuto_forWali(i));
+  }
 }
 
 window.hapusItem = function(idx) {
@@ -296,16 +354,11 @@ window.hapusItem = function(idx) {
 };
 
 window.ubahStatus = function(idx, status) {
+  // hanya dipakai petugas
   let item = keranjang[idx];
   let sisa = item.nominal - item.dibayar;
   item.status = status;
-
-  if (status === 'lunas') {
-    item.cicilan = sisa;
-  } else {
-    item.cicilan = 0;
-  }
-
+  item.cicilan = (status === 'lunas') ? sisa : 0;
   renderKeranjang();
 };
 
@@ -334,18 +387,19 @@ if (btnProses) {
         );
 
       if (item.isTabungan) {
-        if (cicil < 1) {
+        if ((parseInt(cicil)||0) < 1) {
           valid = false;
           const el = document.getElementById('cicilan-error-' + idx);
           if (el) { el.innerText = "Isi nominal!"; el.style.display = 'block'; }
         }
       } else {
-        if (item.status !== 'lunas' && item.status !== 'pending' && cicil < 1) {
-          const el = document.getElementById('cicilan-error-' + idx);
+        const sisa = item.nominal - item.dibayar;
+        if ((parseInt(cicil)||0) < 1 && item.status !== 'pending') {
           valid = false;
+          const el = document.getElementById('cicilan-error-' + idx);
           if (el) { el.innerText = "Isi nominal!"; el.style.display = 'block'; }
         }
-        if (item.status !== 'pending' && cicil > item.sisa) {
+        if ((parseInt(cicil)||0) > sisa && item.status !== 'pending') {
           valid = false;
           const el = document.getElementById('cicilan-error-' + idx);
           if (el) { el.innerText = "Nominal melebihi sisa!"; el.style.display = 'block'; }
@@ -357,6 +411,7 @@ if (btnProses) {
       return;
     }
     if (!modalBody || !modal) return;
+
     let html = `<table class="w-full text-sm border">
       <thead><tr>
         <th class="border px-2 py-1">Tahun</th>
@@ -369,12 +424,12 @@ if (btnProses) {
     let total = 0;
     keranjang.forEach(item => {
       let nilai = item.status === 'lunas' ? item.sisa : (item.cicilan || 0);
-      total += nilai;
+      total += (parseInt(nilai)||0);
       html += `<tr>
         <td class="border px-2 py-1">${item.tahun}</td>
         <td class="border px-2 py-1">${item.jenis}</td>
         <td class="border px-2 py-1">${item.bulanLabel}</td>
-        <td class="border px-2 py-1 text-right">Rp ${nilai.toLocaleString()}</td>
+        <td class="border px-2 py-1 text-right">Rp ${(+nilai).toLocaleString()}</td>
         <td class="border px-2 py-1 text-center capitalize">${item.status}</td>
       </tr>`;
     });
@@ -400,66 +455,63 @@ if (btnSimpan) {
     @if(Auth::user()->hasRole('petugas'))
       @if(isset($siswa))
         const siswaId = {{ $siswa->id }};
-        const bebasDaftarUlang = ['bebas', 'daftar ulang', 'daftar ulang a1', 'daftar ulang a2', 'daftar ulang a3'];
+        let promises = keranjang.map(item => {
+          let jenis = (item.jenis || '').toLowerCase();
 
-       let promises = keranjang.map(item => {
-  let jenis = (item.jenis || '').toLowerCase();
+          // TABUNGAN
+          if (item.isTabungan) {
+            return fetch('{{ route("pembayaran.updateStatus") }}', {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                siswa_id: siswaId,
+                detail_pembayaran_id: item.detailId,
+                tahunAjaran: item.tahun,
+                jumlah: parseInt(item.cicilan),
+                keterangan: item.status || item.keterangan
+              })
+            });
+          }
 
-  // TABUNGAN
-  if (item.isTabungan) {
-    return fetch('{{ route("pembayaran.updateStatus") }}', {
-      method: 'POST',
-      headers: {
-        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        siswa_id: siswaId,
-        detail_pembayaran_id: item.detailId,
-        tahunAjaran: item.tahun,
-        jumlah: parseInt(item.cicilan),
-        keterangan: item.status || item.keterangan // setor/ambil
-      })
-    });
-  }
+          // DAFTAR ULANG/BEBAS
+          if (jenis.includes('daftar ulang') || jenis === 'bebas') {
+            return fetch('{{ route("pembayaran.storeDaftarUlang") }}', {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                siswa_id: siswaId,
+                tahun_ajaran: item.tahun,
+                jenis: item.jenis,
+                cicilan: parseInt(item.cicilan)
+              })
+            });
+          }
 
-  // DAFTAR ULANG/BEBAS
-  if (jenis.includes('daftar ulang') || jenis === 'bebas') {
-    return fetch('{{ route("pembayaran.storeDaftarUlang") }}', {
-      method: 'POST',
-      headers: {
-        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        siswa_id: siswaId,
-        tahun_ajaran: item.tahun,
-        jenis: item.jenis,
-        cicilan: parseInt(item.cicilan)
-      })
-    });
-  }
-
-  // BULANAN
-  return fetch('{{ route("pembayaran.updateStatus") }}', {
-    method: 'POST',
-    headers: {
-      'X-CSRF-TOKEN': '{{ csrf_token() }}',
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-      siswa_id: siswaId,
-      detail_pembayaran_id: item.detailId,
-      tahunAjaran: item.tahun,
-      bulan: item.bulan,
-      jumlah: parseInt(item.cicilan)
-    })
-  });
-});
-
+          // BULANAN
+          return fetch('{{ route("pembayaran.updateStatus") }}', {
+            method: 'POST',
+            headers: {
+              'X-CSRF-TOKEN': '{{ csrf_token() }}',
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              siswa_id: siswaId,
+              detail_pembayaran_id: item.detailId,
+              tahunAjaran: item.tahun,
+              bulan: item.bulan,
+              jumlah: parseInt(item.cicilan)
+            })
+          });
+        });
 
         Promise.all(promises.map(p =>
           p.then(res => {
@@ -467,156 +519,43 @@ if (btnSimpan) {
             return res.json();
           })
         )).then((responses) => {
-          // Ambil info siswa (pakai yang pertama, karena sama saja)
           const infoWA = responses.find(row => row && row.no_hp);
           const nomorWa = infoWA ? infoWA.no_hp : null;
 
-          // Siapkan isi pembayaran, default strip semua
-          let spp = '-', laundry = '-', daftarUlang = '-', tabungan = '-', total = 0;
+          let total = 0;
+          keranjang.forEach(item => total += (parseInt(item.cicilan)||0));
 
-          keranjang.forEach(item => {
-            const nilai = parseInt(item.cicilan) || 0;
-            total += nilai;
-            if (/spp/i.test(item.jenis)) spp = "Rp. " + nilai.toLocaleString();
-            if (/laundry/i.test(item.jenis)) laundry = "Rp. " + nilai.toLocaleString();
-            if (/daftar.?ulang/i.test(item.jenis)) daftarUlang = "Rp. " + nilai.toLocaleString();
-            if (/tabungan/i.test(item.jenis)) tabungan = "Rp. " + nilai.toLocaleString();
-          });
-
-          const namaSiswa = infoWA?.nama_siswa || keranjang[0]?.nama_siswa || "-";
-          const nis = infoWA?.nis || keranjang[0]?.nis || "-";
+          const namaSiswa = infoWA?.nama_siswa || "-";
+          const nis = infoWA?.nis || "-";
           const kelasTerakhir = infoWA?.kelas_terakhir || "-";
           const tglBayar = new Date().toLocaleDateString('id-ID');
-          const metode = "Cash";
           const noBukti = infoWA?.no_bukti || "-";
           const petugas = infoWA?.petugas || "-";
           const totalFormat = "Rp. " + total.toLocaleString();
-// === REKAP BULANAN (SPP/Laundry/dsb) ===
-let rekapPerJenis = {};
-let rekapDaftarUlang = [];
-let rekapTabungan = [];
 
-// Pisahkan jenis pembayaran
-keranjang.forEach(item => {
-  let j = (item.jenis || '').toLowerCase();
-  if (item.isTabungan) {
-    // Tabungan
-    rekapTabungan.push({
-      tahun: item.tahun,
-      nominal: parseInt(item.cicilan) || 0,
-      keterangan: item.status || item.keterangan // setor/ambil
-    });
-  } else if (/daftar.?ulang|bebas/.test(j)) {
-    // Daftar Ulang/Bebas
-    rekapDaftarUlang.push({
-      tahun: item.tahun,
-      jenis: item.jenis,
-      nominal: parseInt(item.cicilan) || 0,
-      status: item.status
-    });
-  } else {
-    // Bulanan (SPP/Laundry)
-    if (!rekapPerJenis[item.jenis]) rekapPerJenis[item.jenis] = [];
-    rekapPerJenis[item.jenis].push({
-      bulan: item.bulanLabel,
-      nominal: parseInt(item.cicilan) || 0,
-      status: item.status
-    });
-  }
-});
-
-// --- Format string rekap per jenis bulanan ---
-let strRekap = '*Rekap Pembayaran*\n━━━━━━━━━━━━━━━━━━━━\n';
-if (Object.keys(rekapPerJenis).length) {
-  Object.entries(rekapPerJenis).forEach(([jenis, list]) => {
-    strRekap += `*${jenis}*\n`;
-    list.forEach(item => {
-      let status = item.status.charAt(0).toUpperCase() + item.status.slice(1);
-      strRekap += `• ${item.bulan} : Rp. ${item.nominal.toLocaleString()} (${status})\n`;
-    });
-  });
-}
-
-// --- Daftar Ulang & Bebas ---
-if (rekapDaftarUlang.length) {
-  strRekap += `*Daftar Ulang/Bebas*\n`;
-  rekapDaftarUlang.forEach(du => {
-    let status = du.status ? du.status.charAt(0).toUpperCase() + du.status.slice(1) : '-';
-    strRekap += `• ${du.jenis} ${du.tahun} : Rp. ${du.nominal.toLocaleString()} (${status})\n`;
-  });
-}
-
-// --- Tabungan ---
-if (rekapTabungan.length) {
-  strRekap += `*Tabungan*\n`;
-  rekapTabungan.forEach(tab => {
-    let aksi = (tab.keterangan === 'ambil') ? 'Tarik' : 'Setor';
-    strRekap += `• ${aksi} ${tab.tahun} : Rp. ${tab.nominal.toLocaleString()}\n`;
-  });
-}
-
-if (!Object.keys(rekapPerJenis).length && !rekapDaftarUlang.length && !rekapTabungan.length) {
-  strRekap += '-\n';
-}
-
-// --- Gabungkan ke pesan utama ---
-const pesan = `*#info sistem*\n*#jangan dibalas*\n
-Assalamualaikum Wr. Wb
-
-*Pondok Pesantren Tahfizul Quran Bilal bin Rabah Sukoharjo*
-==============================
-*TRANSAKSI PEMBAYARAN*
-
-• *Nama*     : ${namaSiswa}
-• *NIS*      : ${nis}
-• *Kelas*    : ${kelasTerakhir}
-• *Tgl Bayar*: ${tglBayar}
-• *No Bukti* : ${noBukti}
-
-${strRekap}
-━━━━━━━━━━━━━━━━━━━━
-*Total*       : ${totalFormat}
-
-Terima kasih, Bapak/Ibu telah menunaikan kewajibannya.
-
-_Petugas_
-${petugas}
-`;
+          const pesan = `Pembayaran a.n. ${namaSiswa} (NIS: ${nis}) pada ${tglBayar}\nTotal: ${totalFormat}\n#BilalBinRabah`;
 
           Swal.fire({
-  title: nomorWa ? 'Kirim info pembayaran ke WhatsApp?' : 'Pembayaran Berhasil',
-  text: nomorWa ? 'Ingin mengirim info pembayaran ke wali melalui WhatsApp Web?' : 'Pembayaran berhasil disimpan.',
-  icon: 'success',
-  showCancelButton: !!nomorWa,
-  confirmButtonText: nomorWa ? 'Ya, kirim!' : 'Tutup',
-  cancelButtonText: nomorWa ? 'Tidak' : undefined,
-}).then((result) => {
-  if (nomorWa && result.isConfirmed) {
-    // Jika user pilih "Ya, kirim!" --> buka WhatsApp
-    let waUrl = "";
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      waUrl = `https://api.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
-    } else {
-      waUrl = `https://web.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
-    }
-    window.open(waUrl, '_blank');
-    setTimeout(() => window.location.reload(), 1500);
-  } else if (nomorWa && result.dismiss === Swal.DismissReason.cancel) {
-    // Jika user pilih "Tidak" --> tetap di web, tampil swal sukses
-    Swal.fire({
-      icon: 'success',
-      title: 'Pembayaran berhasil!',
-      text: 'Data pembayaran berhasil disimpan.',
-      timer: 1800,
-      showConfirmButton: false
-    }).then(() => {
-      window.location.reload();
-    });
-  } else {
-    // Jika tidak ada nomor WA (fallback)
-    window.location.reload();
-  }
-});
+            title: nomorWa ? 'Kirim info pembayaran ke WhatsApp?' : 'Pembayaran Berhasil',
+            text: nomorWa ? 'Ingin mengirim info pembayaran ke wali melalui WhatsApp Web?' : 'Pembayaran berhasil disimpan.',
+            icon: 'success',
+            showCancelButton: !!nomorWa,
+            confirmButtonText: nomorWa ? 'Ya, kirim!' : 'Tutup',
+            cancelButtonText: nomorWa ? 'Tidak' : undefined,
+          }).then((result) => {
+            if (nomorWa && result.isConfirmed) {
+              let waUrl = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+                ? `https://api.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`
+                : `https://web.whatsapp.com/send?phone=${nomorWa}&text=${encodeURIComponent(pesan)}`;
+              window.open(waUrl, '_blank');
+              setTimeout(() => window.location.reload(), 1500);
+            } else if (nomorWa && result.dismiss === Swal.DismissReason.cancel) {
+              Swal.fire({icon:'success',title:'Pembayaran berhasil!',timer:1800,showConfirmButton:false})
+                .then(()=>window.location.reload());
+            } else {
+              window.location.reload();
+            }
+          });
 
         }).catch(async err => {
           let msg = 'Terjadi kesalahan saat menyimpan pembayaran.';
@@ -632,17 +571,117 @@ ${petugas}
       @endif
 
     @else
+      // === WALI: kirim via AJAX ke route checkout + unggah bukti ===
+      const siswaId = {{ $siswa->id ?? 'null' }};
+      if (!siswaId) {
+        Swal.fire('Data siswa tidak ditemukan.', '', 'error');
+        return;
+      }
+
+      const fileInput = document.getElementById('buktiPembayaranInput');
+      if (!fileInput || fileInput.files.length === 0) {
+        Swal.fire('Unggah bukti pembayaran terlebih dahulu.', '', 'warning');
+        return;
+      }
+
+      // sinkronkan nilai cicilan terbaru dari input
       document.querySelectorAll('.cicilan-input').forEach(inp => {
         const idx = parseInt(inp.dataset.idx, 10);
-        inp.value = keranjang[idx].cicilan;
+        const val = unformatRupiah(inp.value);
+        keranjang[idx].cicilan = val;
+        // pastikan status auto terbaru
+        setStatusAuto_forWali(idx);
       });
-      const formCheckout = document.getElementById('formCheckout');
-      if (formCheckout) formCheckout.submit();
+
+      const fd = new FormData();
+      fd.append('_token', '{{ csrf_token() }}');
+      fd.append('siswa_id', siswaId);
+      fd.append('items', JSON.stringify(keranjang.map(it => ({
+        tahun_ajaran: it.tahun,
+        jenis: it.jenis,
+        bulan: it.bulan,
+        detail_pembayaran_id: it.detailId || null,
+        cicilan: parseInt(it.cicilan) || 0,
+        status: it.status,           // dipakai tampilan saja, backend wali tetap pending
+        is_tabungan: !!it.isTabungan
+      }))));
+
+      Array.from(fileInput.files).forEach(f => fd.append('bukti_pembayaran[]', f));
+
+      fetch('{{ route("pembayaran.checkout") }}', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: fd,
+        credentials: 'same-origin'
+      })
+      .then(async (res) => {
+        const ct = res.headers.get('content-type') || '';
+        if (!res.ok) {
+          let msg = `(${res.status}) Gagal menyimpan pembayaran.`;
+          if (ct.includes('application/json')) {
+            const j = await res.json().catch(()=>null);
+            if (j?.message) msg = j.message;
+          } else {
+            const t = await res.text();
+            if (/Page Expired|419/i.test(t)) msg = 'Sesi kedaluwarsa (419). Muat ulang halaman lalu coba lagi.';
+            else if (/login/i.test(t) && /password/i.test(t)) msg = 'Sesi login habis. Silakan login ulang.';
+            else msg = t.slice(0, 200);
+          }
+          throw new Error(msg);
+        }
+        return ct.includes('application/json') ? res.json() : { success: true };
+      })
+      .then((data) => {
+        if (!data?.success) throw new Error(data?.message || 'Gagal menyimpan pembayaran.');
+
+        closeModal();
+        keranjang.forEach(markCellAsPending);
+        keranjang = [];
+        renderKeranjang();
+        Swal.fire({
+          icon: 'info',
+          title: 'Menunggu Validasi',
+          text: 'Pembayaran Anda sedang menunggu validasi bendahara.',
+          confirmButtonColor: '#15803D'
+        });
+      })
+      .catch(err => {
+        Swal.fire('Error', err.message || 'Terjadi kesalahan saat menyimpan.', 'error');
+      });
+
+      function markCellAsPending(item) {
+        if (item.isTabungan) return;
+        const selector = `.btn-pilih-tagihan`
+          + `[data-tahun="${CSS.escape(item.tahun)}"]`
+          + `[data-jenis="${CSS.escape(item.jenis)}"]`
+          + `[data-bulan="${CSS.escape(item.bulan || '')}"]`;
+        const btn = document.querySelector(selector);
+        if (!btn) return;
+        btn.dataset.status = 'pending';
+        btn.classList.remove(
+          'bg-green-500','hover:bg-green-600','text-white',
+          'bg-yellow-300','hover:bg-yellow-400','text-black',
+          'bg-red-500','hover:bg-red-600','text-white',
+          'bg-gray-200','hover:bg-gray-300','text-gray-700'
+        );
+        btn.classList.add('bg-orange-500','hover:bg-orange-600','text-white');
+        if (!btn.querySelector('.pending-flag')) {
+          const flag = document.createElement('span');
+          flag.className = 'pending-flag absolute top-0 right-1 text-[13px] font-bold text-white';
+          flag.innerHTML = '<i class="fa fa-exclamation-triangle"></i>';
+          btn.style.position = 'relative';
+          btn.appendChild(flag);
+        }
+      }
     @endif
   });
 }
 
-// Validasi bukti modal logic (hanya untuk petugas)
+// --- Validasi bukti (PETUGAS) ---
 @if(Auth::user()->hasRole('petugas'))
 function showModalValidasi(imgUrl, buktiId, nominal, status, rawStatus, ext) {
   const modal = document.getElementById('modalValidasi');
@@ -653,11 +692,8 @@ function showModalValidasi(imgUrl, buktiId, nominal, status, rawStatus, ext) {
   if (!previewEl) return;
   previewEl.innerHTML = '';
 
-  if (ext.toLowerCase() === 'pdf') {
-    previewEl.innerHTML = `
-      <a href="${imgUrl}" target="_blank" class="text-blue-600 underline">
-        Lihat file PDF
-      </a>`;
+  if ((ext||'').toLowerCase() === 'pdf') {
+    previewEl.innerHTML = `<a href="${imgUrl}" target="_blank" class="text-blue-600 underline">Lihat file PDF</a>`;
   } else {
     const img = document.createElement('img');
     img.src = imgUrl;
@@ -667,20 +703,14 @@ function showModalValidasi(imgUrl, buktiId, nominal, status, rawStatus, ext) {
       e.stopPropagation();
       const lightbox = document.createElement('div');
       Object.assign(lightbox.style, {
-        position: 'fixed',
-        top: 0, left: 0,
-        width: '100%', height: '100%',
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer',
-        zIndex: 10000
+        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+        backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10000
       });
       const bigImg = document.createElement('img');
       bigImg.src = imgUrl;
       bigImg.alt = 'Bukti Pembayaran (Zoom)';
-      Object.assign(bigImg.style, {
-        maxWidth: '90%', maxHeight: '90%'
-      });
+      Object.assign(bigImg.style, { maxWidth: '90%', maxHeight: '90%' });
       lightbox.appendChild(bigImg);
       document.body.appendChild(lightbox);
       lightbox.addEventListener('click', () => document.body.removeChild(lightbox));
@@ -691,8 +721,7 @@ function showModalValidasi(imgUrl, buktiId, nominal, status, rawStatus, ext) {
   const inputBukti = document.getElementById('modal-bukti-id');
   if (inputBukti) inputBukti.value = buktiId;
 
-  const label = status.charAt(0).toUpperCase() + status.slice(1)
-              + (rawStatus === 'pending' ? ' (pending)' : '');
+  const label = status.charAt(0).toUpperCase() + status.slice(1) + (rawStatus === 'pending' ? ' (pending)' : '');
   const elStatus = document.getElementById('modal-status');
   if (elStatus) elStatus.innerText = label;
 
@@ -704,9 +733,7 @@ function closeModalValidasi() {
   const modal = document.getElementById('modalValidasi');
   if (modal) modal.classList.add('hidden');
 }
-function getCsrfToken(){
-  return document.querySelector('meta[name="csrf-token"]')?.content;
-}
+function getCsrfToken(){ return document.querySelector('meta[name="csrf-token"]')?.content; }
 function validasiBukti(status) {
   const buktiId = document.getElementById('modal-bukti-id')?.value;
   if (!buktiId) return;
@@ -719,63 +746,51 @@ function validasiBukti(status) {
     },
     body: JSON.stringify({ status })
   })
-  .then(resp => {
-    return resp.json();
-  })
-  .then(data => {
-    if (data.success) window.location.reload();
-    else alert('Gagal validasi: '+ (data.message || 'unknown'));
-  })
-  .catch(err => {
-    alert('Error, cek console log.');
-  });
+  .then(resp => resp.json())
+  .then(data => { if (data.success) window.location.reload(); else alert('Gagal validasi: '+ (data.message || 'unknown')); })
+  .catch(() => alert('Error, cek console log.'));
 }
 @endif
 
 document.addEventListener('DOMContentLoaded', () => {
   @if(Auth::user()->hasRole('wali'))
+    window.isWali = true;
     const fileInput = document.getElementById('buktiPembayaranInput');
     const preview   = document.getElementById('previewBukti');
     const dt        = new DataTransfer();
 
     function onFileChange(e) {
       fileInput.removeEventListener('change', onFileChange);
-
       Array.from(e.target.files).forEach(file => {
         const exists = Array.from(dt.files).some(
           f => f.name === file.name && f.size === file.size && f.type === file.type
         );
         if (!exists) dt.items.add(file);
       });
-
       fileInput.files = dt.files;
 
-      preview.innerHTML = '';
-      Array.from(dt.files).forEach(file => {
-        if (file.type.startsWith('image/')) {
-          const reader = new FileReader();
-          reader.onload = evt => {
-            preview.innerHTML += `
-              <img
-                src="${evt.target.result}"
-                class="max-h-32 rounded shadow mt-2"
-              />`;
-          };
-          reader.readAsDataURL(file);
-        } else {
-          preview.innerHTML += `
-            <span class="text-sm text-gray-700 block">
-              File: ${file.name}
-            </span>`;
-        }
-      });
-
+      if (preview) {
+        preview.innerHTML = '';
+        Array.from(dt.files).forEach(file => {
+          if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = evt => {
+              preview.innerHTML += `<img src="${evt.target.result}" class="max-h-32 rounded shadow mt-2" />`;
+            };
+            reader.readAsDataURL(file);
+          } else {
+            preview.innerHTML += `<span class="text-sm text-gray-700 block">File: ${file.name}</span>`;
+          }
+        });
+      }
       fileInput.addEventListener('change', onFileChange);
     }
-    // fileInput.addEventListener('change', onFileChange);
+    // aktifkan bila perlu:
+    // if (fileInput) fileInput.addEventListener('change', onFileChange);
   @endif
 
   renderKeranjang();
+
   const prosesBtn = document.getElementById('btnProsesPembayaran');
   if (prosesBtn && window.isAdmin) {
     prosesBtn.disabled = true;
@@ -803,31 +818,25 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       let tahunAjaran = '';
-let jenisTabungan = 'Tabungan';
+      let jenisTabungan = 'Tabungan';
 
-let jenisSelect = form.querySelector('select[name="detail_pembayaran_id"]');
-if (jenisSelect) {
-  let opt = jenisSelect.options[jenisSelect.selectedIndex];
-  if (opt) {
-    jenisTabungan = opt.getAttribute('data-jenis') || (opt.textContent.split('-')[0]?.trim() || 'Tabungan');
-    tahunAjaran = opt.getAttribute('data-tahun') || (opt.textContent.split('-')[1]?.trim() || '');
-  }
-} else {
-  // Ambil dari div jika hanya 1 tabungan
-  let infoDiv = form.querySelector('.px-3.py-2.rounded-lg.border.bg-white.text-green-700.font-bold.shadow-sm');
-  if (infoDiv) {
-    let parts = infoDiv.innerText.split(' - ');
-    jenisTabungan = parts[0]?.trim() || 'Tabungan';
-    tahunAjaran = parts[1]?.trim() || '';
-  }
-}
+      let jenisSelect = form.querySelector('select[name="detail_pembayaran_id"]');
+      if (jenisSelect) {
+        let opt = jenisSelect.options[jenisSelect.selectedIndex];
+        if (opt) {
+          jenisTabungan = opt.getAttribute('data-jenis') || (opt.textContent.split('-')[0]?.trim() || 'Tabungan');
+          tahunAjaran = opt.getAttribute('data-tahun') || (opt.textContent.split('-')[1]?.trim() || '');
+        }
+      } else {
+        let infoDiv = form.querySelector('.px-3.py-2.rounded-lg.border.bg-white.text-green-700.font-bold.shadow-sm');
+        if (infoDiv) {
+          let parts = infoDiv.innerText.split(' - ');
+          jenisTabungan = parts[0]?.trim() || 'Tabungan';
+          tahunAjaran = parts[1]?.trim() || '';
+        }
+      }
 
-
-      if (keranjang.some(k =>
-        k.tahun === tahunAjaran &&
-        k.jenis === jenisTabungan &&
-        k.isTabungan
-      )) {
+      if (keranjang.some(k => k.tahun === tahunAjaran && k.jenis === jenisTabungan && k.isTabungan)) {
         Swal.fire('Tabungan sudah ada di keranjang!', '', 'info');
         return;
       }
@@ -865,7 +874,7 @@ function updateTotal() {
       nilai = unformatRupiah(inp.value);
       keranjang[idx].cicilan = nilai;
     }
-    total += nilai;
+    total += (parseInt(nilai)||0);
   });
   const elTotal = document.getElementById('totalPembayaran');
   if (elTotal) elTotal.innerText = 'Rp ' + total.toLocaleString();
